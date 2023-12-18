@@ -1,0 +1,15 @@
+[package]
+name = "xelis-discord-tip-bot"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.25", features = ["macros", "signal", "time", "sync"] }
+serenity = "0.12.0"
+anyhow = "1"
+thiserror = "1"
+xelis_common = { package = "xelis_common", git = "https://github.com/xelis-project/xelis-blockchain.git", branch = "dev" }
+xelis_wallet = { package = "xelis_wallet", git = "https://github.com/xelis-project/xelis-blockchain.git", branch = "dev" }
+clap = { version = "3.1.18", features = ["derive"] }
