@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1.25", features = ["macros", "signal", "time", "sync"] }
-serenity = "0.12.0"
+poise = "0.6.1-rc1"
 anyhow = "1"
 thiserror = "1"
 xelis_common = { package = "xelis_common", git = "https://github.com/xelis-project/xelis-blockchain.git", branch = "dev" }

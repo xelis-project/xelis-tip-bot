@@ -645,17 +645,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "command_attr"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32f08c85a02e066b7b4f7dcb60eee6ae0793ef7d6452a3547d1f19665df070a9"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -800,6 +789,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "darling"
+version = "0.20.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0209d94da627ab5605dcccf08bb18afa5009cfbef48d8a8b7d7bdbc79be25c5e"
+dependencies = [
+ "darling_core",
+ "darling_macro",
+]
+
+[[package]]
+name = "darling_core"
+version = "0.20.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "177e3443818124b357d8e76f53be906d60937f0d3a90773a664fa63fa253e621"
+dependencies = [
+ "fnv",
+ "ident_case",
+ "proc-macro2",
+ "quote",
+ "strsim",
+ "syn 2.0.41",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.20.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "836a9bbc7ad63342d6d6e7b815ccab164bc77a2d95d84bc3117a8c0d5c98e2d5"
+dependencies = [
+ "darling_core",
+ "quote",
+ "syn 2.0.41",
+]
+
+[[package]]
 name = "dashmap"
 version = "5.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -827,6 +851,17 @@ checksum = "8eb30d70a07a3b04884d2677f06bec33509dc67ca60d92949e5535352d3191dc"
 dependencies = [
  "powerfmt",
  "serde",
+]
+
+[[package]]
+name = "derivative"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -1257,6 +1292,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ident_case"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
+
+[[package]]
 name = "idna"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1366,12 +1407,6 @@ name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
-
-[[package]]
-name = "levenshtein"
-version = "1.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db13adb97ab515a3691f56e4dbab09283d0b86cb45abd991d8634a9d6f501760"
 
 [[package]]
 name = "libc"
@@ -1640,6 +1675,35 @@ name = "pkg-config"
 version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26072860ba924cbfa98ea39c8c19b4dd6a4a25423dbdf219c1eca91aa0cf6964"
+
+[[package]]
+name = "poise"
+version = "0.6.1-rc1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bde9f83da70341825e4116c06ffd5f1b23155121c2801ea29a8e178a7fc9857"
+dependencies = [
+ "async-trait",
+ "derivative",
+ "futures-util",
+ "parking_lot 0.12.1",
+ "poise_macros",
+ "regex",
+ "serenity",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "poise_macros"
+version = "0.6.1-rc1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "130fd27280c82e5ab5b147838b5ff9f9da33603fbadfff8ff613de530c12922d"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.41",
+]
 
 [[package]]
 name = "poly1305"
@@ -2075,12 +2139,10 @@ dependencies = [
  "bitflags 2.4.1",
  "bytes",
  "chrono",
- "command_attr",
  "dashmap",
  "flate2",
  "futures",
  "fxhash",
- "levenshtein",
  "mime_guess",
  "parking_lot 0.12.1",
  "percent-encoding",
@@ -2088,7 +2150,6 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
- "static_assertions",
  "time",
  "tokio",
  "tokio-tungstenite",
@@ -2096,7 +2157,6 @@ dependencies = [
  "typemap_rev",
  "typesize",
  "url",
- "uwl",
 ]
 
 [[package]]
@@ -2232,12 +2292,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
 name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2354,9 +2408,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.30"
+version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4a34ab300f2dee6e562c10a046fc05e358b29f9bf92277f30c3c8d82275f6f5"
+checksum = "f657ba42c3f86e7680e53c8cd3af8abbe56b5491790b46e22e19c0d57463583e"
 dependencies = [
  "deranged",
  "itoa",
@@ -2374,9 +2428,9 @@ checksum = "ef927ca75afb808a4d64dd374f00a2adf8d0fcff8e7b184af886c3c87ec4a3f3"
 
 [[package]]
 name = "time-macros"
-version = "0.2.15"
+version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ad70d68dba9e1f8aceda7aa6711965dfec1cac869f311a51bd08b3a2ccbce20"
+checksum = "26197e33420244aeb70c3e8c78376ca46571bc4e701e4791c2cd9f57dcb3a43f"
 dependencies = [
  "time-core",
 ]
@@ -2639,12 +2693,6 @@ name = "utf-8"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
-
-[[package]]
-name = "uwl"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4bf03e0ca70d626ecc4ba6b0763b934b6f2976e8c744088bb3c1d646fbb1ad0"
 
 [[package]]
 name = "version_check"
@@ -2966,7 +3014,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "serenity",
+ "poise",
  "thiserror",
  "tokio",
  "xelis_common",
@@ -2976,7 +3024,7 @@ dependencies = [
 [[package]]
 name = "xelis_common"
 version = "1.7.0"
-source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#35755c3498d44b07ca662601f275a183acba0ed8"
+source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#dfdb04b2866a7b4e44ee28eabb247f6eab840c29"
 dependencies = [
  "actix-rt",
  "actix-web",
@@ -3009,7 +3057,7 @@ dependencies = [
 [[package]]
 name = "xelis_wallet"
 version = "1.7.0"
-source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#35755c3498d44b07ca662601f275a183acba0ed8"
+source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#dfdb04b2866a7b4e44ee28eabb247f6eab840c29"
 dependencies = [
  "actix",
  "actix-web",
