@@ -12,3 +12,5 @@ Supported commands are:
 - `/tip` transfer XELIS to a Discord user.
 
 There is no specific requirements like Database setup because it is directly using the Services capabilities from XELIS wallet.
+
+A task in `WalletService` is running and wait on wallet events to handle new incoming transactions.
