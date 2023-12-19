@@ -3,12 +3,16 @@ mod service;
 use anyhow::{Result, Error};
 use clap::Parser;
 use poise::{serenity_prelude::{GatewayIntents, ClientBuilder, CreateEmbed, CreateEmbedFooter, User, Colour}, CreateReply};
-use service::WalletService;
+use service::{WalletService, WalletServiceImpl};
 use xelis_common::{network::Network, utils::{format_xelis, from_xelis}, crypto::address::Address};
+use xelis_wallet::config::DEFAULT_DAEMON_ADDRESS;
 
+// Context type for poise with our data type
 type Context<'a> = poise::Context<'a, WalletService, Error>;
 
+// Icon URL for thumbnail
 const ICON: &str = "https://github.com/xelis-project/xelis-assets/raw/master/icons/png/square/green_background_black_logo.png?raw=true";
+// Color of the embed
 const COLOR: u32 = 196559;
 
 #[derive(Parser)]
@@ -17,13 +21,16 @@ pub struct Config {
     /// Network selected for wallet
     #[clap(long, arg_enum, default_value_t = Network::Mainnet)]
     network: Network,
-    // Password for wallet
+    /// Password for wallet
     #[clap(short, long)]
     password: String,
-    // Name for the wallet
+    /// Name for the wallet
     #[clap(short, long)]
     wallet_name: String,
-    // Discord bot token
+    /// Daemon address for wallet
+    #[clap(short, long, default_value_t = String::from(DEFAULT_DAEMON_ADDRESS))]
+    daemon_address: String,
+    /// Discord bot token
     #[clap(long)]
     token: String,
 }
@@ -32,25 +39,33 @@ pub struct Config {
 async fn main() -> Result<()> {
     let config = Config::parse();
 
-    let service = WalletService::new(config.wallet_name, config.password, config.network)?;
+    let service = WalletServiceImpl::new(config.wallet_name, config.password, config.daemon_address, config.network).await?;
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
 
-    let framework = poise::Framework::builder()
-        .options(poise::FrameworkOptions {
-            commands: vec![balance(), deposit(), withdraw(), tip()],
-            ..Default::default()
-        })
-        .setup(|ctx, _ready, framework| {
-            Box::pin(async move {
-                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(service)
+    // Create the framework
+    let framework = {
+        let service = service.clone();
+        poise::Framework::builder()
+            .options(poise::FrameworkOptions {
+                commands: vec![balance(), deposit(), withdraw(), tip()],
+                ..Default::default()
             })
-        })
-        .build();
+            .setup(|ctx, _ready, framework| {
+                Box::pin(async move {
+                    poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                    Ok(service)
+                })
+            })
+            .build()
+    };
 
+    // Create the client using token and intents
     let mut client = ClientBuilder::new(config.token, intents)
         .framework(framework)
         .await?;
+
+    // start the service
+    service.start(client.http.clone()).await?;
 
     // start listening for events by starting a single shard
     if let Err(why) = client.start().await {
