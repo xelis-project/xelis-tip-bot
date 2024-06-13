@@ -12,4 +12,4 @@ anyhow = "1"
 thiserror = "1"
 xelis_common = { package = "xelis_common", git = "https://github.com/xelis-project/xelis-blockchain.git", branch = "dev" }
 xelis_wallet = { package = "xelis_wallet", git = "https://github.com/xelis-project/xelis-blockchain.git", branch = "dev" }
-clap = { version = "3.1.18", features = ["derive"] }
+clap = { version = "4.5.2", features = ["derive"] }

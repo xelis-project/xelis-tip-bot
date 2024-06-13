@@ -34,9 +34,10 @@ const COLOR: u32 = 196559;
 
 #[derive(Parser)]
 #[clap(version = "1.0.0", about = "XELIS Tip Bot")]
+#[command(styles = xelis_common::get_cli_styles())]
 pub struct Config {
     /// Network selected for wallet
-    #[clap(long, default_value_t = Network::Mainnet)]
+    #[clap(long, value_enum, default_value_t = Network::Mainnet)]
     network: Network,
     /// Password for wallet
     #[clap(short, long)]
