@@ -1,4 +1,4 @@
-use std::{sync::{Arc, atomic::{AtomicBool, Ordering}}, path::Path};
+use std::{path::Path, sync::{atomic::{AtomicBool, Ordering}, Arc}};
 
 use anyhow::Result;
 use poise::serenity_prelude::{User, Http, CreateMessage, CreateEmbed};
@@ -48,6 +48,8 @@ pub enum ServiceError {
     NotEnoughFundsForFee(u64),
     #[error("Service is already running")]
     AlreadyRunning,
+    #[error("Withdraw is locked")]
+    WithdrawLocked,
     #[error(transparent)]
     Any(#[from] anyhow::Error),
     #[error(transparent)]
@@ -58,7 +60,8 @@ pub type WalletService = Arc<WalletServiceImpl>;
 
 pub struct WalletServiceImpl {
     wallet: Arc<Wallet>,
-    running: AtomicBool
+    running: AtomicBool,
+    locked: AtomicBool,
 }
 
 pub struct Deposit {
@@ -81,7 +84,8 @@ impl WalletServiceImpl {
 
         let service = Arc::new(Self {
             wallet,
-            running: AtomicBool::new(false)
+            running: AtomicBool::new(false),
+            locked: AtomicBool::new(false)
         });
 
         Ok(service)
@@ -98,7 +102,7 @@ impl WalletServiceImpl {
                 println!("Error in event loop: {:?}", e);
             }
         });
-    
+
         Ok(())
     }
 
@@ -153,7 +157,10 @@ impl WalletServiceImpl {
                         }
                     },
                     _ => {}
-                }
+                },
+                Event::Rescan { start_topoheight: _ } => {
+                    self.locked.store(true, Ordering::SeqCst);
+                },
                 _ => {}
             }
         }
@@ -211,6 +218,10 @@ impl WalletServiceImpl {
     pub async fn withdraw(&self, user: &User, to: Address, amount: u64) -> Result<Hash, ServiceError> {
         if amount == 0 {
             return Err(ServiceError::Zero);
+        }
+
+        if self.locked.load(Ordering::SeqCst) {
+            return Err(ServiceError::WithdrawLocked);
         }
 
         let user = user.id.into();
