@@ -4,20 +4,37 @@ use anyhow::Result;
 use poise::serenity_prelude::{User, Http, CreateMessage, CreateEmbed};
 use thiserror::Error;
 use xelis_common::{
-    api::{wallet::EntryType, DataElement, DataValue}, config::XELIS_ASSET, crypto::{
+    api::{
+        wallet::EntryType,
+        DataElement,
+        DataValue
+    },
+    config::XELIS_ASSET,
+    crypto::{
         ecdlp::NoOpProgressTableGenerationReportFunction,
         Address,
         Hash,
         Hashable
-    }, network::Network, transaction::builder::{FeeBuilder, TransactionTypeBuilder, TransferBuilder}, utils::format_xelis
+    },
+    network::Network,
+    serializer::{Reader, ReaderError, Serializer, Writer},
+    transaction::builder::{
+        FeeBuilder,
+        TransactionTypeBuilder,
+        TransferBuilder
+    },
+    utils::format_xelis
 };
 use xelis_wallet::{
-    error::WalletError, storage::EncryptedStorage, wallet::{Event, Wallet}
+    error::WalletError,
+    storage::EncryptedStorage,
+    wallet::{Event, Wallet}
 };
 
 use crate::{ICON, COLOR};
 
 const BALANCES_TREE: &str = "balances";
+const HISTORY_TREE: &str = "history";
 
 #[derive(Debug, Error)]
 pub enum ServiceError {
@@ -42,6 +59,12 @@ pub type WalletService = Arc<WalletServiceImpl>;
 pub struct WalletServiceImpl {
     wallet: Arc<Wallet>,
     running: AtomicBool
+}
+
+pub struct Deposit {
+    pub user_id: u64,
+    pub amount: u64,
+    pub transaction_hash: Hash
 }
 
 impl WalletServiceImpl {
@@ -116,6 +139,9 @@ impl WalletServiceImpl {
                                         let new_balance = balance + amount;
                                         // Update balance
                                         storage.set_custom_data(BALANCES_TREE, &user_id.into(), &new_balance.into())?;
+
+                                        // Store the TX hash in the history
+                                        storage.set_custom_data(HISTORY_TREE, &transaction.hash.clone().into(), &user_id.into())?;
                                     }
 
                                     // Send message to user
@@ -224,5 +250,20 @@ impl WalletServiceImpl {
 
     pub fn network(&self) -> &Network {
         self.wallet.get_network()
+    }
+}
+
+impl Serializer for Deposit {
+    fn write(&self, writer: &mut Writer) {
+        writer.write_u64(&self.user_id);
+        writer.write_u64(&self.amount);
+        writer.write_hash(&self.transaction_hash);
+    }
+
+    fn read(reader: &mut Reader) -> Result<Self, ReaderError> {
+        let user_id = reader.read_u64()?;
+        let amount = reader.read_u64()?;
+        let transaction_hash = reader.read_hash()?;
+        Ok(Self { user_id, amount, transaction_hash })
     }
 }
