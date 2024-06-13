@@ -2,9 +2,26 @@ mod service;
 
 use anyhow::{Result, Error};
 use clap::Parser;
-use poise::{serenity_prelude::{GatewayIntents, ClientBuilder, CreateEmbed, CreateEmbedFooter, User, Colour}, CreateReply};
-use service::{WalletService, WalletServiceImpl};
-use xelis_common::{network::Network, utils::{format_xelis, from_xelis}, crypto::address::Address};
+use poise::{
+    serenity_prelude::{
+        GatewayIntents,
+        ClientBuilder,
+        CreateEmbed,
+        CreateEmbedFooter,
+        User,
+        Colour
+    },
+    CreateReply
+};
+use service::{
+    WalletService,
+    WalletServiceImpl
+};
+use xelis_common::{
+    network::Network,
+    utils::{format_xelis, from_xelis},
+    crypto::Address
+};
 use xelis_wallet::config::DEFAULT_DAEMON_ADDRESS;
 
 // Context type for poise with our data type
@@ -19,7 +36,7 @@ const COLOR: u32 = 196559;
 #[clap(version = "1.0.0", about = "XELIS Tip Bot")]
 pub struct Config {
     /// Network selected for wallet
-    #[clap(long, arg_enum, default_value_t = Network::Mainnet)]
+    #[clap(long, default_value_t = Network::Mainnet)]
     network: Network,
     /// Password for wallet
     #[clap(short, long)]

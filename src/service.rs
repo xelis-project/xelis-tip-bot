@@ -4,13 +4,16 @@ use anyhow::Result;
 use poise::serenity_prelude::{User, Http, CreateMessage, CreateEmbed};
 use thiserror::Error;
 use xelis_common::{
-    crypto::hash::{Hash, Hashable},
-    api::{DataValue, DataElement},
-    network::Network,
-    crypto::address::Address,
-    utils::format_xelis, config::XELIS_ASSET
+    api::{wallet::EntryType, DataElement, DataValue}, config::XELIS_ASSET, crypto::{
+        ecdlp::NoOpProgressTableGenerationReportFunction,
+        Address,
+        Hash,
+        Hashable
+    }, network::Network, transaction::builder::{FeeBuilder, TransactionTypeBuilder, TransferBuilder}, utils::format_xelis
 };
-use xelis_wallet::{wallet::{Wallet, Event}, storage::EncryptedStorage, entry::EntryData};
+use xelis_wallet::{
+    error::WalletError, storage::EncryptedStorage, wallet::{Event, Wallet}
+};
 
 use crate::{ICON, COLOR};
 
@@ -29,7 +32,9 @@ pub enum ServiceError {
     #[error("Service is already running")]
     AlreadyRunning,
     #[error(transparent)]
-    Any(#[from] anyhow::Error)
+    Any(#[from] anyhow::Error),
+    #[error(transparent)]
+    WalletError(#[from] WalletError)
 }
 
 pub type WalletService = Arc<WalletServiceImpl>;
@@ -41,13 +46,15 @@ pub struct WalletServiceImpl {
 
 impl WalletServiceImpl {
     pub async fn new(name: String, password: String, daemon_address: String, network: Network) -> Result<WalletService> {
+        let precomputed_tables = Wallet::read_or_generate_precomputed_tables(None, NoOpProgressTableGenerationReportFunction)?;
+
         let wallet = if Path::new(&name).is_dir() {
-            Wallet::open(name, password, network)?
+            Wallet::open(name, password, network, precomputed_tables)?
         } else {
-            Wallet::create(name, password, None, network)?
+            Wallet::create(name, password, None, network, precomputed_tables)?
         };
 
-        wallet.set_online_mode(&daemon_address).await?;
+        wallet.set_online_mode(&daemon_address, true).await?;
 
         let service = Arc::new(Self {
             wallet,
@@ -95,38 +102,38 @@ impl WalletServiceImpl {
         loop {
             let event = receiver.recv().await?;
             match event {
-                // TODO handle reorgs
-                Event::NewTransaction(transaction) => match transaction.get_entry() {
-                    EntryData::Incoming(_, transfers) => {
-                        let key = self.wallet.get_public_key();
+                Event::NewTransaction(transaction) => match transaction.entry {
+                    EntryType::Incoming { from: _, transfers } => {
                         // Check if there is any transfer that is for us
-                        for transfer in transfers.iter().filter(|t| *t.get_asset() == XELIS_ASSET && t.get_key() == key) {
-                            if let Some(data) = transfer.get_extra_data() {
+                        for transfer in transfers.iter().filter(|t| t.asset == XELIS_ASSET) {
+                            if let Some(data) = &transfer.extra_data {
                                 if let Some(user_id) = data.as_value().and_then(|v| v.as_u64()).ok() {
-                                    let amount = transfer.get_amount();
+                                    let amount = transfer.amount;
                                     {
                                         let mut storage = self.wallet.get_storage().write().await;
                                         // Calculate new balance
                                         let balance = self.get_balance_internal(&storage, user_id);
                                         let new_balance = balance + amount;
                                         // Update balance
-                                        storage.set_custom_data(BALANCES_TREE, &DataValue::U64(user_id), &DataElement::Value(Some(DataValue::U64(new_balance))))?;
+                                        storage.set_custom_data(BALANCES_TREE, &user_id.into(), &new_balance.into())?;
                                     }
 
                                     // Send message to user
-                                    if let Err(e) = self.notify_deposit(&http, user_id, amount, transaction.get_hash()).await {
+                                    if let Err(e) = self.notify_deposit(&http, user_id, amount, &transaction.hash).await {
                                         println!("Error while notifying user of deposit: {:?}", e);
                                     }
                                 }
-                            }   
+                            }
                         }
                     },
                     _ => {}
                 }
+                _ => {}
             }
         }
     }
 
+    // Get the balance for a user based on its id
     fn get_balance_internal(&self, storage: &EncryptedStorage, user: u64) -> u64 {
         let balance = match storage.get_custom_data(BALANCES_TREE, &DataValue::U64(user)) {
             Ok(balance) => balance,
@@ -144,7 +151,7 @@ impl WalletServiceImpl {
 
     // Generate a deposit address for a user based on its id
     pub fn get_address_for_user(&self, user: &User) -> Address {
-        self.wallet.get_address_with(DataElement::Value(Some(DataValue::U64(user.id.into()))))
+        self.wallet.get_address_with(DataElement::Value(DataValue::U64(user.id.into())))
     }
 
     // Transfer XEL from one user to another
@@ -168,8 +175,8 @@ impl WalletServiceImpl {
         let to_balance = self.get_balance_internal(&storage, to);
 
         // Update balances
-        storage.set_custom_data(BALANCES_TREE, &DataValue::U64(from), &DataElement::Value(Some(DataValue::U64(from_balance - amount))))?;
-        storage.set_custom_data(BALANCES_TREE, &DataValue::U64(to), &DataElement::Value(Some(DataValue::U64(to_balance + amount))))?;
+        storage.set_custom_data(BALANCES_TREE, &from.into(), &(from_balance - amount).into())?;
+        storage.set_custom_data(BALANCES_TREE, &to.into(), &(to_balance + amount).into())?;
 
         Ok(())
     }
@@ -181,31 +188,38 @@ impl WalletServiceImpl {
         }
 
         let user = user.id.into();
-        let (balance, fee, transaction) = {
-            let storage = self.wallet.get_storage().read().await;
+        let mut storage = self.wallet.get_storage().write().await;
+        let (balance, fee, mut state, transaction) = {
             let balance = self.get_balance_internal(&storage, user);
             if amount > balance {
                 return Err(ServiceError::NotEnoughFunds(amount));
             }
-    
-            let transaction = self.wallet.send_to(&storage, XELIS_ASSET, to, amount)?;
-            let fee = transaction.get_fee();
+
+            let builder = TransactionTypeBuilder::Transfers(vec![TransferBuilder {
+                    amount,
+                    asset: XELIS_ASSET,
+                    destination: to,
+                    extra_data: None
+                }
+            ]);
+
+            let fee = self.wallet.estimate_fees(builder.clone()).await?;
             // Verify if he has enough with fees included
             if fee + amount > balance {
                 return Err(ServiceError::NotEnoughFundsForFee(fee));
             }
-            (balance, fee, transaction)
+
+            let (state, transaction) = self.wallet.create_transaction_with_storage(&storage, builder, FeeBuilder::Value(fee)).await?;
+            (balance, fee, state, transaction)
         };
 
-        match self.wallet.submit_transaction(&transaction).await {
-            Ok(_) => {
-                // Update balance
-                let mut storage = self.wallet.get_storage().write().await;
-                storage.set_custom_data(BALANCES_TREE, &DataValue::U64(user), &DataElement::Value(Some(DataValue::U64(balance - (fee + amount)))))?;
-                Ok(transaction.hash())
-            },
-            Err(e) => Err(ServiceError::Any(e.into()))
-        }
+        self.wallet.submit_transaction(&transaction).await?;
+
+        // Update balance
+        storage.set_custom_data(BALANCES_TREE, &user.into(), &(balance - (fee + amount)).into())?;
+        state.apply_changes(&mut storage).await?;
+
+        Ok(transaction.hash())
     }
 
     pub fn network(&self) -> &Network {
