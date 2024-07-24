@@ -1,11 +1,18 @@
-use std::{path::Path, sync::{atomic::{AtomicBool, Ordering}, Arc}};
+use std::{
+    collections::HashSet,
+    path::Path,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc
+    }
+};
 
 use anyhow::Result;
 use poise::serenity_prelude::{User, Http, CreateMessage, CreateEmbed};
 use thiserror::Error;
 use xelis_common::{
     api::{
-        wallet::EntryType,
+        wallet::{EntryType, TransactionEntry},
         DataElement,
         DataValue
     },
@@ -53,7 +60,9 @@ pub enum ServiceError {
     #[error(transparent)]
     Any(#[from] anyhow::Error),
     #[error(transparent)]
-    WalletError(#[from] WalletError)
+    WalletError(#[from] WalletError),
+    #[error("Wallet is offline")]
+    WalletOffline,
 }
 
 pub type WalletService = Arc<WalletServiceImpl>;
@@ -122,46 +131,99 @@ impl WalletServiceImpl {
         Ok(())
     }
 
+    // Handle a confirmed transaction
+    // This function is called when a transaction is in stable topoheight
+    async fn handle_confirmed_transaction(&self, transaction: &TransactionEntry, http: &Http) -> Result<()> {
+        match &transaction.entry {
+            EntryType::Incoming { from: _, transfers } => {
+                // Check if there is any transfer that is for us
+                for transfer in transfers.iter().filter(|t| t.asset == XELIS_ASSET) {
+                    if let Some(data) = &transfer.extra_data {
+                        if let Some(user_id) = data.as_value().and_then(|v| v.as_u64()).ok() {
+                            let amount = transfer.amount;
+                            {
+                                let mut storage = self.wallet.get_storage().write().await;
+                                let tx_key = transaction.hash.clone().into();
+                                if storage.has_custom_data(HISTORY_TREE, &tx_key)? {
+                                    // Already processed this TX
+                                    continue;
+                                }
+
+                                // Calculate new balance
+                                let balance = self.get_balance_internal(&storage, user_id);
+                                let new_balance = balance + amount;
+                                // Update balance
+                                storage.set_custom_data(BALANCES_TREE, &user_id.into(), &new_balance.into())?;
+
+                                // Store the TX hash in the history
+                                storage.set_custom_data(HISTORY_TREE, &tx_key, &user_id.into())?;
+                            }
+
+                            // Send message to user
+                            if let Err(e) = self.notify_deposit(&http, user_id, amount, &transaction.hash).await {
+                                println!("Error while notifying user of deposit: {:?}", e);
+                            }
+                        }
+                    }
+                }
+            },
+            _ => {}
+        }
+
+        Ok(())
+    }
+
     // this function is called one time at WalletService creation,
     // and is notified by the wallet of any new transaction
     async fn event_loop(self: WalletService, http: Arc<Http>) -> Result<()> {
+        // Get all unconfirmed transactions
+        let mut unconfirmed_transactions: HashSet<TransactionEntry> = HashSet::new();
+
+        // Receiver for wallet events
         let mut receiver = self.wallet.subscribe_events().await;
+
+        // Receiver for stable topoheight changes
+        let mut stable_topoheight_receiver = {
+            let lock = self.wallet.get_network_handler().await;
+            let network_handler = lock.lock().await;
+
+            if let Some(network_handler) = network_handler.as_ref() {
+                network_handler.get_api().on_stable_topoheight_changed_event().await?
+            } else {
+                return Err(ServiceError::WalletOffline.into());
+            }
+        };
+
+        // Handle events
         loop {
-            let event = receiver.recv().await?;
-            match event {
-                Event::NewTransaction(transaction) => match transaction.entry {
-                    EntryType::Incoming { from: _, transfers } => {
-                        // Check if there is any transfer that is for us
-                        for transfer in transfers.iter().filter(|t| t.asset == XELIS_ASSET) {
-                            if let Some(data) = &transfer.extra_data {
-                                if let Some(user_id) = data.as_value().and_then(|v| v.as_u64()).ok() {
-                                    let amount = transfer.amount;
-                                    {
-                                        let mut storage = self.wallet.get_storage().write().await;
-                                        // Calculate new balance
-                                        let balance = self.get_balance_internal(&storage, user_id);
-                                        let new_balance = balance + amount;
-                                        // Update balance
-                                        storage.set_custom_data(BALANCES_TREE, &user_id.into(), &new_balance.into())?;
+            tokio::select! {
+                res = stable_topoheight_receiver.next() => {
+                    let event = res?;
 
-                                        // Store the TX hash in the history
-                                        storage.set_custom_data(HISTORY_TREE, &transaction.hash.clone().into(), &user_id.into())?;
-                                    }
+                    let mut txs = HashSet::with_capacity(unconfirmed_transactions.len());
+                    std::mem::swap(&mut txs, &mut unconfirmed_transactions);
 
-                                    // Send message to user
-                                    if let Err(e) = self.notify_deposit(&http, user_id, amount, &transaction.hash).await {
-                                        println!("Error while notifying user of deposit: {:?}", e);
-                                    }
-                                }
-                            }
+                    // Handle all transactions that are now confirmed
+                    for transaction in txs {
+                        if transaction.topoheight <= event.new_stable_topoheight {
+                            self.handle_confirmed_transaction(&transaction, &http).await?;
+                        } else {
+                            unconfirmed_transactions.insert(transaction);
                         }
-                    },
-                    _ => {}
+                    }
                 },
-                Event::Rescan { start_topoheight: _ } => {
-                    self.locked.store(true, Ordering::SeqCst);
-                },
-                _ => {}
+                res = receiver.recv() => {
+                    let event = res?;
+                    match event {
+                        Event::NewTransaction(transaction) => {
+                            unconfirmed_transactions.insert(transaction);
+                        }
+                        Event::Rescan { start_topoheight: _ } => {
+                            self.locked.store(true, Ordering::SeqCst);
+                        },
+                        _ => {}
+                    }
+                }
             }
         }
     }
