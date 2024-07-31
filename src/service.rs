@@ -37,7 +37,7 @@ use xelis_wallet::{
     storage::EncryptedStorage,
     wallet::{Event, Wallet}
 };
-use log::{error, info};
+use log::{error, warn, info};
 
 use crate::{ICON, COLOR};
 
@@ -211,6 +211,7 @@ impl WalletServiceImpl {
                         if transaction.topoheight <= event.new_stable_topoheight {
                             self.handle_confirmed_transaction(&transaction, &http).await?;
                         } else {
+                            info!("Re-adding TX to unconfirmed transactions: {}", transaction.hash);
                             unconfirmed_transactions.insert(transaction);
                         }
                     }
@@ -219,9 +220,11 @@ impl WalletServiceImpl {
                     let event = res?;
                     match event {
                         Event::NewTransaction(transaction) => {
+                            info!("New transaction: {}", transaction.hash);
                             unconfirmed_transactions.insert(transaction);
                         }
                         Event::Rescan { start_topoheight: _ } => {
+                            warn!("Rescan event received, this should not happen");
                             self.locked.store(true, Ordering::SeqCst);
                         },
                         _ => {}
