@@ -65,7 +65,7 @@ async fn main() -> Result<()> {
         let service = service.clone();
         poise::Framework::builder()
             .options(poise::FrameworkOptions {
-                commands: vec![balance(), deposit(), withdraw(), tip()],
+                commands: vec![status(), balance(), deposit(), withdraw(), tip()],
                 ..Default::default()
             })
             .setup(|ctx, _ready, framework| {
@@ -89,6 +89,39 @@ async fn main() -> Result<()> {
     if let Err(why) = client.start().await {
         println!("An error occurred while running the client: {:?}", why);
     }
+
+    Ok(())
+}
+
+
+/// Show your current balance
+#[poise::command(slash_command, broadcast_typing)]
+async fn status(ctx: Context<'_>) -> Result<(), Error> {
+    // Retrieve balance for user
+    let service = ctx.data();
+    let balance = service.get_wallet_balance().await?;
+    let topoheight = service.get_wallet_topoheight().await?;
+    let network = service.network();
+    let online = service.is_wallet_online().await;
+
+    let embed = CreateEmbed::default()
+        .title("Status")
+        .field("Balance: ", format_xelis(balance), false)
+        .field("Synced TopoHeight: ", topoheight.to_string(), false)
+        .field("Network: ", network.to_string(), false)
+        .field("Is Online: ", online.to_string(), false)
+        .thumbnail(ICON)
+        .colour(COLOR);
+    let mut reply = CreateReply::default()
+        .embed(embed);
+
+    // Set reply to ephemeral if command was not used in DM
+    if ctx.channel_id().to_channel(ctx.http()).await?.private().is_none() {
+        reply = reply.ephemeral(true);
+    }
+
+    // Send reply
+    ctx.send(reply).await?;
 
     Ok(())
 }

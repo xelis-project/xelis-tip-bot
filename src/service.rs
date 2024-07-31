@@ -244,6 +244,20 @@ impl WalletServiceImpl {
         self.get_balance_internal(&storage, user.id.into())
     }
 
+    // Get the balance for the service
+    pub async fn get_wallet_balance(&self) -> Result<u64> {
+        let storage = self.wallet.get_storage().read().await;
+        let balance = storage.get_plaintext_balance_for(&XELIS_ASSET).await?;
+        Ok(balance)
+    }
+
+    // Get the current wallet topoheight
+    pub async fn get_wallet_topoheight(&self) -> Result<u64> {
+        let storage = self.wallet.get_storage().read().await;
+        let topoheight = storage.get_synced_topoheight()?;
+        Ok(topoheight)
+    }
+
     // Generate a deposit address for a user based on its id
     pub fn get_address_for_user(&self, user: &User) -> Address {
         self.wallet.get_address_with(DataElement::Value(DataValue::U64(user.id.into())))
@@ -321,8 +335,14 @@ impl WalletServiceImpl {
         Ok(transaction.hash())
     }
 
+    // Get the network of the wallet
     pub fn network(&self) -> &Network {
         self.wallet.get_network()
+    }
+
+    // Check if the wallet is online
+    pub async fn is_wallet_online(&self) -> bool {
+        self.wallet.is_online().await
     }
 }
 
