@@ -37,6 +37,7 @@ use xelis_wallet::{
     storage::EncryptedStorage,
     wallet::{Event, Wallet}
 };
+use log::{error, info};
 
 use crate::{ICON, COLOR};
 
@@ -108,7 +109,7 @@ impl WalletServiceImpl {
 
         tokio::spawn(async move {
             if let Err(e) = self.event_loop(http).await {
-                println!("Error in event loop: {:?}", e);
+                error!("Error in event loop: {:?}", e);
             }
         });
 
@@ -146,9 +147,11 @@ impl WalletServiceImpl {
                                 let tx_key = transaction.hash.clone().into();
                                 if storage.has_custom_data(HISTORY_TREE, &tx_key)? {
                                     // Already processed this TX
+                                    info!("Already processed TX: {}", transaction.hash);
                                     continue;
                                 }
 
+                                info!("Processing TX: {}", transaction.hash);
                                 // Calculate new balance
                                 let balance = self.get_balance_internal(&storage, user_id);
                                 let new_balance = balance + amount;
@@ -161,7 +164,7 @@ impl WalletServiceImpl {
 
                             // Send message to user
                             if let Err(e) = self.notify_deposit(&http, user_id, amount, &transaction.hash).await {
-                                println!("Error while notifying user of deposit: {:?}", e);
+                                error!("Error while notifying user of deposit: {:?}", e);
                             }
                         }
                     }

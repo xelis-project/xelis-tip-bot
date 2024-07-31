@@ -1,5 +1,7 @@
 mod service;
 
+use std::time::Duration;
+
 use anyhow::{Result, Error};
 use clap::Parser;
 use poise::{
@@ -18,11 +20,20 @@ use service::{
     WalletServiceImpl
 };
 use xelis_common::{
+    async_handler,
+    crypto::Address,
     network::Network,
-    utils::{format_xelis, from_xelis},
-    crypto::Address
+    prompt::{
+        command::CommandManager,
+        LogLevel,
+        ModuleConfig,
+        Prompt,
+        PromptError
+    },
+    utils::{format_xelis, from_xelis}
 };
 use xelis_wallet::config::DEFAULT_DAEMON_ADDRESS;
+use log::error;
 
 // Context type for poise with our data type
 type Context<'a> = poise::Context<'a, WalletService, Error>;
@@ -51,11 +62,50 @@ pub struct Config {
     /// Discord bot token
     #[clap(long)]
     token: String,
+    /// Set log level
+    #[clap(long, value_enum, default_value_t = LogLevel::Info)]
+    log_level: LogLevel,
+    /// Set file log level
+    #[clap(long, value_enum, default_value_t = LogLevel::Info)]
+    file_log_level: LogLevel,
+    /// Disable the log file
+    #[clap(long)]
+    disable_file_logging: bool,
+    /// Disable the log filename date based
+    /// If disabled, the log file will be named xelis-tipbot.log instead of YYYY-MM-DD.xelis-tipbot.log
+    #[clap(long)]
+    disable_file_log_date_based: bool,
+    /// Disable the usage of colors in log
+    #[clap(long)]
+    disable_log_color: bool,
+    /// Disable terminal interactive mode
+    /// You will not be able to write CLI commands in it or to have an updated prompt
+    #[clap(long)]
+    disable_interactive_mode: bool,
+    /// Log filename
+    /// 
+    /// By default filename is xelis-wallet.log.
+    /// File will be stored in logs directory, this is only the filename, not the full path.
+    /// Log file is rotated every day and has the format YYYY-MM-DD.xelis-tipbot.log.
+    #[clap(long, default_value_t = String::from("xelis-tipbot.log"))]
+    filename_log: String,
+    /// Logs directory
+    /// 
+    /// By default it will be logs/ of the current directory.
+    /// It must end with a / to be a valid folder.
+    #[clap(long, default_value_t = String::from("logs/"))]
+    logs_path: String,
+    /// Module configuration for logs
+    #[clap(long)]
+    logs_modules: Vec<ModuleConfig>,
+    /// Set the path for wallet storage to open/create a wallet at this location
+    #[clap(long)]
+    wallet_path: Option<String>,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = Config::parse();
+    let mut config = Config::parse();
 
     let service = WalletServiceImpl::new(config.wallet_name, config.password, config.daemon_address, config.network).await?;
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
@@ -85,14 +135,30 @@ async fn main() -> Result<()> {
     // start the service
     service.start(client.http.clone()).await?;
 
-    // start listening for events by starting a single shard
-    if let Err(why) = client.start().await {
-        println!("An error occurred while running the client: {:?}", why);
-    }
+    config.logs_modules.push(ModuleConfig { module: "serenity".to_string(), level: LogLevel::Warn });
+    let prompt = Prompt::new(config.log_level, &config.logs_path, &config.filename_log, config.disable_file_logging, config.disable_file_log_date_based, config.disable_log_color, !config.disable_interactive_mode, config.logs_modules, config.file_log_level)?;
+
+    tokio::select! {
+        // start listening for events by starting a single shard
+        res = client.start() => {
+            if let Err(e) = res {
+                error!("An error occurred while running the client: {:?}", e);
+            }
+        },
+        res = prompt.start(Duration::from_millis(1000), Box::new(async_handler!(prompt_message_builder)), None) => {
+            if let Err(e) = res {
+                error!("An error occurred while running the prompt: {:?}", e);
+            }
+        }
+    };
 
     Ok(())
 }
 
+// Default prompt message builder
+async fn prompt_message_builder(_: &Prompt, _: Option<&CommandManager>) -> Result<String, PromptError> {
+    Ok("XELIS Tip Bot >>".to_string())
+}
 
 /// Show your current balance
 #[poise::command(slash_command, broadcast_typing)]
