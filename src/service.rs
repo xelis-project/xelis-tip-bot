@@ -108,8 +108,11 @@ impl WalletServiceImpl {
         }
 
         tokio::spawn(async move {
-            if let Err(e) = self.event_loop(http).await {
-                error!("Error in event loop: {:?}", e);
+            loop {
+                info!("Starting event loop");
+                if let Err(e) = self.event_loop(&http).await {
+                    error!("Error in event loop: {:?}", e);
+                }
             }
         });
 
@@ -178,7 +181,7 @@ impl WalletServiceImpl {
 
     // this function is called one time at WalletService creation,
     // and is notified by the wallet of any new transaction
-    async fn event_loop(self: WalletService, http: Arc<Http>) -> Result<()> {
+    async fn event_loop(self: &WalletService, http: &Arc<Http>) -> Result<()> {
         // Get all unconfirmed transactions
         let mut unconfirmed_transactions: HashSet<TransactionEntry> = HashSet::new();
 
@@ -209,7 +212,7 @@ impl WalletServiceImpl {
                     // Handle all transactions that are now confirmed
                     for transaction in txs {
                         if transaction.topoheight <= event.new_stable_topoheight {
-                            self.handle_confirmed_transaction(&transaction, &http).await?;
+                            self.handle_confirmed_transaction(&transaction, http).await?;
                         } else {
                             info!("Re-adding TX to unconfirmed transactions: {}", transaction.hash);
                             unconfirmed_transactions.insert(transaction);
@@ -349,6 +352,12 @@ impl WalletServiceImpl {
     // Check if the wallet is online
     pub async fn is_wallet_online(&self) -> bool {
         self.wallet.is_online().await
+    }
+
+    // Rescan the wallet
+    pub async fn rescan(&self) -> Result<(), ServiceError> {
+        self.wallet.rescan(0, true).await?;
+        Ok(())
     }
 }
 

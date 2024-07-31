@@ -1,8 +1,8 @@
 mod service;
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-use anyhow::{Result, Error};
+use anyhow::{Error, Result};
 use clap::Parser;
 use poise::{
     serenity_prelude::{
@@ -24,7 +24,13 @@ use xelis_common::{
     crypto::Address,
     network::Network,
     prompt::{
-        command::CommandManager,
+        argument::ArgumentManager,
+        command::{
+            Command,
+            CommandError,
+            CommandHandler,
+            CommandManager
+        },
         LogLevel,
         ModuleConfig,
         Prompt,
@@ -133,10 +139,16 @@ async fn main() -> Result<()> {
         .await?;
 
     // start the service
-    service.start(client.http.clone()).await?;
+    Arc::clone(&service).start(client.http.clone()).await?;
 
     config.logs_modules.push(ModuleConfig { module: "serenity".to_string(), level: LogLevel::Warn });
     let prompt = Prompt::new(config.log_level, &config.logs_path, &config.filename_log, config.disable_file_logging, config.disable_file_log_date_based, config.disable_log_color, !config.disable_interactive_mode, config.logs_modules, config.file_log_level)?;
+    let command_manager = CommandManager::new(prompt.clone());
+    command_manager.store_in_context(service)?;
+
+    command_manager.register_default_commands()?;
+    command_manager.add_command(Command::new("rescan", "Rescan the wallet", CommandHandler::Async(async_handler!(rescan))))?;
+    command_manager.display_commands()?;
 
     tokio::select! {
         // start listening for events by starting a single shard
@@ -145,7 +157,7 @@ async fn main() -> Result<()> {
                 error!("An error occurred while running the client: {:?}", e);
             }
         },
-        res = prompt.start(Duration::from_millis(1000), Box::new(async_handler!(prompt_message_builder)), None) => {
+        res = prompt.start(Duration::from_millis(1000), Box::new(async_handler!(prompt_message_builder)), Some(&command_manager)) => {
             if let Err(e) = res {
                 error!("An error occurred while running the prompt: {:?}", e);
             }
@@ -159,6 +171,19 @@ async fn main() -> Result<()> {
 async fn prompt_message_builder(_: &Prompt, _: Option<&CommandManager>) -> Result<String, PromptError> {
     Ok("XELIS Tip Bot >>".to_string())
 }
+
+async fn rescan(manager: &CommandManager, _: ArgumentManager) -> Result<(), CommandError> {
+    let context = manager.get_context().lock()?;
+    let service: &WalletService = context.get()?;
+    if let Err(e) = service.rescan().await {
+        manager.error(format!("An error occurred while rescanning the wallet: {}", e.to_string()));
+    } else {
+        manager.message("Wallet has been rescanned");
+    }
+
+    Ok(())
+}
+
 
 /// Show your current balance
 #[poise::command(slash_command, broadcast_typing)]
