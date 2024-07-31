@@ -184,20 +184,21 @@ async fn rescan(manager: &CommandManager, _: ArgumentManager) -> Result<(), Comm
     Ok(())
 }
 
-
 /// See the status of the wallet
 #[poise::command(slash_command, broadcast_typing)]
 async fn status(ctx: Context<'_>) -> Result<(), Error> {
     // Retrieve balance for user
     let service = ctx.data();
     let balance = service.get_wallet_balance().await?;
+    let total_balance = service.get_total_users_balance().await?;
     let topoheight = service.get_wallet_topoheight().await?;
     let network = service.network();
     let online = service.is_wallet_online().await;
 
     let embed = CreateEmbed::default()
         .title("Status")
-        .field("Balance: ", format_xelis(balance), false)
+        .field("Wallet Balance: ", format_xelis(balance), false)
+        .field("Total Users Balance: ", format_xelis(total_balance), false)
         .field("Synced TopoHeight: ", topoheight.to_string(), false)
         .field("Network: ", network.to_string(), false)
         .field("Is Online: ", online.to_string(), false)

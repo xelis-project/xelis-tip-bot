@@ -37,7 +37,7 @@ use xelis_wallet::{
     storage::EncryptedStorage,
     wallet::{Event, Wallet}
 };
-use log::{error, warn, info};
+use log::{debug, error, info, warn};
 
 use crate::{ICON, COLOR};
 
@@ -251,6 +251,19 @@ impl WalletServiceImpl {
     pub async fn get_balance_for_user(&self, user: &User) -> u64 {
         let storage = self.wallet.get_storage().read().await;
         self.get_balance_internal(&storage, user.id.into())
+    }
+
+    pub async fn get_total_users_balance(&self) -> Result<u64> {
+        let storage = self.wallet.get_storage().read().await;
+        let mut total = 0;
+        for key in storage.get_custom_tree_keys(&BALANCES_TREE.to_string(), &None)? {
+            let user_id = key.to_u64()?;
+            debug!("Getting balance for key: {}", user_id);
+            let balance: u64 = self.get_balance_internal(&storage, user_id);
+            total += balance;
+        }
+
+        Ok(total)
     }
 
     // Get the balance for the service
