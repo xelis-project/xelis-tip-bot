@@ -185,7 +185,7 @@ async fn rescan(manager: &CommandManager, _: ArgumentManager) -> Result<(), Comm
 }
 
 
-/// Show your current balance
+/// See the status of the wallet
 #[poise::command(slash_command, broadcast_typing)]
 async fn status(ctx: Context<'_>) -> Result<(), Error> {
     // Retrieve balance for user
