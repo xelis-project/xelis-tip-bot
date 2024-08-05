@@ -446,6 +446,38 @@ impl WalletServiceImpl {
         Ok(())
     }
 
+    // Withdraw all XEL from the service to an address
+    pub async fn withdraw_all(&self, to: Address) -> Result<(), ServiceError> {
+        let mut storage = self.wallet.get_storage().write().await;
+        let amount = storage.get_plaintext_balance_for(&XELIS_ASSET).await.unwrap_or(0);
+        let fee = self.wallet.estimate_fees(TransactionTypeBuilder::Transfers(vec![TransferBuilder {
+            amount,
+            asset: XELIS_ASSET,
+            destination: to.clone(),
+            extra_data: None
+        }])).await?;
+
+        let (mut state, transaction) = self.wallet.create_transaction_with_storage(
+            &storage,
+            TransactionTypeBuilder::Transfers(vec![TransferBuilder {
+                amount: amount - fee,
+                asset: XELIS_ASSET,
+                destination: to.clone(),
+                extra_data: None
+            }]),
+            FeeBuilder::Value(fee)
+        ).await?;
+
+        self.wallet.submit_transaction(&transaction).await?;
+
+        let tx_hash = transaction.hash();
+        info!("Withdrawing {} XEL to {} in TX {}", format_xelis(amount - fee), to, tx_hash);
+
+        state.apply_changes(&mut storage).await?;
+
+        Ok(())
+    }
+
     // Get the network of the wallet
     pub fn network(&self) -> &Network {
         self.wallet.get_network()
