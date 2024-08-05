@@ -12,7 +12,7 @@ Supported commands are:
 - `/deposit` Show your deposit address.
 - `/withdraw` Withdraw XELIS to a wallet on chain.
 - `/tip` transfer XELIS to a Discord user.
-- `status` show current wallet service status.
+- `/status` show current wallet service status.
 
 There is no specific requirements like Database setup because it is directly using the Services capabilities from XELIS wallet.
 
