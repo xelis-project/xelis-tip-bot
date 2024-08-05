@@ -128,7 +128,6 @@ pub struct Config {
     wallet_path: Option<String>,
 }
 
-
 #[derive(BotCommands, Clone)]
 #[command(rename_rule = "lowercase", description = "These commands are supported:")]
 pub enum TelegramCommand {
@@ -224,6 +223,8 @@ async fn main() -> Result<()> {
 
     command_manager.register_default_commands()?;
     command_manager.add_command(Command::new("rescan", "Rescan the wallet", CommandHandler::Async(async_handler!(rescan))))?;
+    command_manager.add_command(Command::new("clear_balances", "Clear all balances", CommandHandler::Async(async_handler!(clear_balances))))?;
+
     command_manager.display_commands()?;
 
     tokio::select! {
@@ -259,6 +260,18 @@ async fn rescan(manager: &CommandManager, _: ArgumentManager) -> Result<(), Comm
         manager.error(format!("An error occurred while rescanning the wallet: {}", e.to_string()));
     } else {
         manager.message("Wallet has been rescanned");
+    }
+
+    Ok(())
+}
+
+async fn clear_balances(manager: &CommandManager, _: ArgumentManager) -> Result<(), CommandError> {
+    let context = manager.get_context().lock()?;
+    let service: &WalletService = context.get()?;
+    if let Err(e) = service.clear_balances().await {
+        manager.error(format!("An error occurred while clearing the balances: {}", e.to_string()));
+    } else {
+        manager.message("Balances have been cleared");
     }
 
     Ok(())

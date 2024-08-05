@@ -426,6 +426,16 @@ impl WalletServiceImpl {
         Ok(tx_hash)
     }
 
+    // Clear the balances tree
+    // This will remove all user balances
+    pub async fn clear_balances(&self) -> Result<(), ServiceError> {
+        warn!("Clearing balances tree");
+        let mut storage = self.wallet.get_storage().write().await;
+        storage.clear_custom_tree(BALANCES_TREE)?;
+
+        Ok(())
+    }
+
     // Get the network of the wallet
     pub fn network(&self) -> &Network {
         self.wallet.get_network()
