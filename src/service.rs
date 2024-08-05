@@ -436,6 +436,16 @@ impl WalletServiceImpl {
         Ok(())
     }
 
+    // Add balance to a user
+    pub async fn add_balance(&self, user: &UserApplication, amount: u64) -> Result<(), ServiceError> {
+        warn!("Adding {} XEL to {:?}", format_xelis(amount), user);
+        let mut storage = self.wallet.get_storage().write().await;
+        let balance = self.get_balance_internal(&storage, user);
+        storage.set_custom_data(BALANCES_TREE, &user.into(), &(balance + amount).into())?;
+
+        Ok(())
+    }
+
     // Get the network of the wallet
     pub fn network(&self) -> &Network {
         self.wallet.get_network()
