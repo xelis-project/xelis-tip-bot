@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::VecDeque,
     path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -8,7 +8,8 @@ use std::{
 };
 
 use anyhow::Result;
-use poise::serenity_prelude::{User, Http, CreateMessage, CreateEmbed};
+use poise::serenity_prelude::{Http, CreateMessage, CreateEmbed};
+use teloxide::{types::ChatId, Bot};
 use thiserror::Error;
 use xelis_common::{
     api::{
@@ -39,10 +40,53 @@ use xelis_wallet::{
 };
 use log::{debug, error, info, warn};
 
-use crate::{ICON, COLOR};
+use crate::{telegram_message::TelegramMessage, COLOR, ICON};
 
 const BALANCES_TREE: &str = "balances";
 const HISTORY_TREE: &str = "history";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UserApplication {
+    Telegram(u64),
+    Discord(u64)
+}
+
+impl Serializer for UserApplication {
+    fn write(&self, writer: &mut Writer) {
+        match self {
+            UserApplication::Telegram(id) => {
+                writer.write_u8(0);
+                writer.write_u64(id);
+            },
+            UserApplication::Discord(id) => {
+                writer.write_u8(1);
+                writer.write_u64(id);
+            }
+        }
+    }
+
+    fn read(reader: &mut Reader) -> Result<Self, ReaderError> {
+        let id = match reader.read_u8()? {
+            0 => UserApplication::Telegram(reader.read_u64()?),
+            1 => UserApplication::Discord(reader.read_u64()?),
+            _ => return Err(ReaderError::InvalidValue)
+        };
+
+        Ok(id)
+    }
+}
+
+impl Into<DataValue> for &UserApplication {
+    fn into(self) -> DataValue {
+        DataValue::Blob(self.to_bytes())
+    }
+}
+
+impl Into<DataElement> for &UserApplication {
+    fn into(self) -> DataElement {
+        DataElement::Value(self.into())
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum ServiceError {
@@ -81,6 +125,7 @@ pub struct Deposit {
 }
 
 impl WalletServiceImpl {
+    // Create a new wallet service
     pub async fn new(name: String, password: String, daemon_address: String, network: Network) -> Result<WalletService> {
         let precomputed_tables = Wallet::read_or_generate_precomputed_tables(None, NoOpProgressTableGenerationReportFunction)?;
 
@@ -102,7 +147,7 @@ impl WalletServiceImpl {
     }
 
     // Start the service to scan all incoming TXs
-    pub async fn start(self: WalletService, http: Arc<Http>) -> Result<(), ServiceError> {
+    pub async fn start(self: WalletService, http: Arc<Http>, bot: Bot) -> Result<(), ServiceError> {
         if self.running.swap(true, Ordering::SeqCst) {
             return Err(ServiceError::AlreadyRunning);
         }
@@ -110,7 +155,7 @@ impl WalletServiceImpl {
         tokio::spawn(async move {
             loop {
                 info!("Starting event loop");
-                if let Err(e) = self.event_loop(&http).await {
+                if let Err(e) = self.event_loop(&http, &bot).await {
                     error!("Error in event loop: {:?}", e);
                 }
             }
@@ -119,9 +164,9 @@ impl WalletServiceImpl {
         Ok(())
     }
 
-    // Notify a user of a deposit
-    async fn notify_deposit(&self, http: &Http, user_id: u64, amount: u64, transaction_hash: &Hash) -> Result<()> {
-        let user = http.get_user(user_id.into()).await?;
+    // Notify a discord user of a deposit
+    async fn notify_discord_deposit(&self, http: &Http, user_id: u64, amount: u64, transaction_hash: &Hash) -> Result<()> {
+        let user = http.get_user(user_id.try_into()?).await?;
         let channel = user.create_dm_channel(&http).await?;
 
         let embed = CreateEmbed::default()
@@ -135,15 +180,26 @@ impl WalletServiceImpl {
         Ok(())
     }
 
+    // Notify a telegram user of a deposit
+    async fn notify_telegram_deposit(&self, bot: &Bot, user_id: u64, amount: u64, transaction_hash: &Hash) -> Result<()> {
+        TelegramMessage::new(&bot, ChatId(user_id as i64))
+            .title("Deposit")
+            .field("You received", format!("{} XEL", format_xelis(amount)), false)
+            .field("Transaction", transaction_hash.to_string(), false)
+            .send().await?;
+
+        Ok(())
+    }
+
     // Handle a confirmed transaction
     // This function is called when a transaction is in stable topoheight
-    async fn handle_confirmed_transaction(&self, transaction: &TransactionEntry, http: &Http) -> Result<()> {
+    async fn handle_confirmed_transaction(&self, transaction: &TransactionEntry, http: &Http, bot: &Bot) -> Result<()> {
         match &transaction.entry {
             EntryType::Incoming { from: _, transfers } => {
                 // Check if there is any transfer that is for us
                 for transfer in transfers.iter().filter(|t| t.asset == XELIS_ASSET) {
                     if let Some(data) = &transfer.extra_data {
-                        if let Some(user_id) = data.as_value().and_then(|v| v.as_u64()).ok() {
+                        if let Some(user_id) = data.as_value().and_then(|v| v.as_type::<UserApplication>()).ok() {
                             let amount = transfer.amount;
                             {
                                 let mut storage = self.wallet.get_storage().write().await;
@@ -156,18 +212,27 @@ impl WalletServiceImpl {
 
                                 info!("Processing TX: {}", transaction.hash);
                                 // Calculate new balance
-                                let balance = self.get_balance_internal(&storage, user_id);
+                                let balance = self.get_balance_internal(&storage, &user_id);
                                 let new_balance = balance + amount;
                                 // Update balance
-                                storage.set_custom_data(BALANCES_TREE, &user_id.into(), &new_balance.into())?;
+                                storage.set_custom_data(BALANCES_TREE, &(&user_id).into(), &new_balance.into())?;
 
                                 // Store the TX hash in the history
-                                storage.set_custom_data(HISTORY_TREE, &tx_key, &user_id.into())?;
+                                storage.set_custom_data(HISTORY_TREE, &tx_key, &(&user_id).into())?;
                             }
 
-                            // Send message to user
-                            if let Err(e) = self.notify_deposit(&http, user_id, amount, &transaction.hash).await {
-                                error!("Error while notifying user of deposit: {:?}", e);
+                            // Notify user
+                            match user_id {
+                                UserApplication::Telegram(user_id) => {
+                                    if let Err(e) = self.notify_telegram_deposit(&bot, user_id, amount, &transaction.hash).await {
+                                        error!("Error while notifying user of deposit: {:?}", e);
+                                    }
+                                },
+                                UserApplication::Discord(user_id) => {
+                                    if let Err(e) = self.notify_discord_deposit(&http, user_id, amount, &transaction.hash).await {
+                                        error!("Error while notifying user of deposit: {:?}", e);
+                                    }
+                                }
                             }
                         }
                     }
@@ -181,9 +246,9 @@ impl WalletServiceImpl {
 
     // this function is called one time at WalletService creation,
     // and is notified by the wallet of any new transaction
-    async fn event_loop(self: &WalletService, http: &Arc<Http>) -> Result<()> {
+    async fn event_loop(self: &WalletService, http: &Arc<Http>, bot: &Bot) -> Result<()> {
         // Get all unconfirmed transactions
-        let mut unconfirmed_transactions: HashSet<TransactionEntry> = HashSet::new();
+        let mut unconfirmed_transactions: VecDeque<TransactionEntry> = VecDeque::new();
 
         // Receiver for wallet events
         let mut receiver = self.wallet.subscribe_events().await;
@@ -206,16 +271,14 @@ impl WalletServiceImpl {
                 res = stable_topoheight_receiver.next() => {
                     let event = res?;
 
-                    let mut txs = HashSet::with_capacity(unconfirmed_transactions.len());
-                    std::mem::swap(&mut txs, &mut unconfirmed_transactions);
-
                     // Handle all transactions that are now confirmed
-                    for transaction in txs {
+                    while let Some(transaction) = unconfirmed_transactions.pop_front() {
                         if transaction.topoheight <= event.new_stable_topoheight {
-                            self.handle_confirmed_transaction(&transaction, http).await?;
+                            self.handle_confirmed_transaction(&transaction, http, bot).await?;
                         } else {
                             info!("Re-adding TX to unconfirmed transactions: {}", transaction.hash);
-                            unconfirmed_transactions.insert(transaction);
+                            unconfirmed_transactions.push_front(transaction);
+                            break;
                         }
                     }
                 },
@@ -224,7 +287,12 @@ impl WalletServiceImpl {
                     match event {
                         Event::NewTransaction(transaction) => {
                             info!("New transaction: {}", transaction.hash);
-                            unconfirmed_transactions.insert(transaction);
+                            if unconfirmed_transactions.iter().any(|t| t.hash == transaction.hash) {
+                                warn!("TX already in unconfirmed transactions: {}", transaction.hash);
+                                continue;
+                            }
+
+                            unconfirmed_transactions.push_back(transaction);
                         }
                         Event::Rescan { start_topoheight: _ } => {
                             warn!("Rescan event received, this should not happen");
@@ -238,8 +306,8 @@ impl WalletServiceImpl {
     }
 
     // Get the balance for a user based on its id
-    fn get_balance_internal(&self, storage: &EncryptedStorage, user: u64) -> u64 {
-        let balance = match storage.get_custom_data(BALANCES_TREE, &DataValue::U64(user)) {
+    fn get_balance_internal(&self, storage: &EncryptedStorage, user: &UserApplication) -> u64 {
+        let balance = match storage.get_custom_data(BALANCES_TREE, &DataValue::Blob(user.to_bytes())) {
             Ok(balance) => balance,
             Err(_) => return 0
         };
@@ -248,18 +316,19 @@ impl WalletServiceImpl {
     }
 
     // Get the balance for a user based on its id
-    pub async fn get_balance_for_user(&self, user: &User) -> u64 {
+    pub async fn get_balance_for_user(&self, user: &UserApplication) -> u64 {
         let storage = self.wallet.get_storage().read().await;
-        self.get_balance_internal(&storage, user.id.into())
+        self.get_balance_internal(&storage, user)
     }
 
+    // Get the total balance for all users
     pub async fn get_total_users_balance(&self) -> Result<u64> {
         let storage = self.wallet.get_storage().read().await;
         let mut total = 0;
         for key in storage.get_custom_tree_keys(&BALANCES_TREE.to_string(), &None)? {
-            let user_id = key.to_u64()?;
-            debug!("Getting balance for key: {}", user_id);
-            let balance: u64 = self.get_balance_internal(&storage, user_id);
+            let user_id = key.to_type()?;
+            debug!("Getting balance for discord key: {:?}", user_id);
+            let balance: u64 = self.get_balance_internal(&storage, &user_id);
             total += balance;
         }
 
@@ -269,7 +338,7 @@ impl WalletServiceImpl {
     // Get the balance for the service
     pub async fn get_wallet_balance(&self) -> Result<u64> {
         let storage = self.wallet.get_storage().read().await;
-        let balance = storage.get_plaintext_balance_for(&XELIS_ASSET).await?;
+        let balance = storage.get_plaintext_balance_for(&XELIS_ASSET).await.unwrap_or(0);
         Ok(balance)
     }
 
@@ -281,12 +350,12 @@ impl WalletServiceImpl {
     }
 
     // Generate a deposit address for a user based on its id
-    pub fn get_address_for_user(&self, user: &User) -> Address {
-        self.wallet.get_address_with(DataElement::Value(DataValue::U64(user.id.into())))
+    pub fn get_address_for_user(&self, user: &UserApplication) -> Address {
+        self.wallet.get_address_with(DataElement::Value(DataValue::Blob(user.to_bytes())))
     }
 
     // Transfer XEL from one user to another
-    pub async fn transfer(&self, from: &User, to: &User, amount: u64) -> Result<(), ServiceError> {
+    pub async fn transfer(&self, from: &UserApplication, to: &UserApplication, amount: u64) -> Result<(), ServiceError> {
         if amount == 0 {
             return Err(ServiceError::Zero);
         }
@@ -295,10 +364,8 @@ impl WalletServiceImpl {
             return Err(ServiceError::SelfTip);
         }
 
-        let from = from.id.into();
-        let to = to.id.into();
         let mut storage = self.wallet.get_storage().write().await;
-        let from_balance = self.get_balance_internal(&storage, from);
+        let from_balance = self.get_balance_internal(&storage, &from);
         if amount > from_balance {
             return Err(ServiceError::NotEnoughFunds(amount));
         }
@@ -313,7 +380,7 @@ impl WalletServiceImpl {
     }
 
     // Withdraw XEL from the service to an address
-    pub async fn withdraw(&self, user: &User, to: Address, amount: u64) -> Result<Hash, ServiceError> {
+    pub async fn withdraw(&self, user: &UserApplication, to: Address, amount: u64) -> Result<Hash, ServiceError> {
         if amount == 0 {
             return Err(ServiceError::Zero);
         }
@@ -322,7 +389,6 @@ impl WalletServiceImpl {
             return Err(ServiceError::WithdrawLocked);
         }
 
-        let user = user.id.into();
         let mut storage = self.wallet.get_storage().write().await;
         let (balance, fee, mut state, transaction) = {
             let balance = self.get_balance_internal(&storage, user);

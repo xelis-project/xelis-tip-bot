@@ -1,7 +1,9 @@
 mod service;
+mod telegram_message;
 
 use std::{sync::Arc, time::Duration};
-
+use telegram_message::{InlineCode, TelegramMessage};
+use thiserror::Error;
 use anyhow::{Error, Result};
 use clap::Parser;
 use poise::{
@@ -16,8 +18,16 @@ use poise::{
     CreateReply
 };
 use service::{
+    UserApplication,
     WalletService,
     WalletServiceImpl
+};
+use teloxide::{
+    dispatching::{HandlerExt, UpdateFilterExt},
+    prelude::{dptree, Dispatcher, Requester},
+    types::{ChatId, Message, Update},
+    utils::command::BotCommands,
+    Bot
 };
 use xelis_common::{
     async_handler,
@@ -49,6 +59,12 @@ const ICON: &str = "https://github.com/xelis-project/xelis-assets/raw/master/ico
 // Color of the embed
 const COLOR: u32 = 196559;
 
+#[derive(Debug, Error)]
+pub enum TelegramError {
+    #[error("No user found")]
+    NoUser
+}
+
 #[derive(Parser)]
 #[clap(version = "1.0.0", about = "XELIS Tip Bot")]
 #[command(styles = xelis_common::get_cli_styles())]
@@ -67,7 +83,10 @@ pub struct Config {
     daemon_address: String,
     /// Discord bot token
     #[clap(long)]
-    token: String,
+    discord_token: String,
+    /// Telegram bot token
+    #[clap(long)]
+    telegram_token: String,
     /// Set log level
     #[clap(long, value_enum, default_value_t = LogLevel::Info)]
     log_level: LogLevel,
@@ -109,37 +128,94 @@ pub struct Config {
     wallet_path: Option<String>,
 }
 
+
+#[derive(BotCommands, Clone)]
+#[command(rename_rule = "lowercase", description = "These commands are supported:")]
+pub enum TelegramCommand {
+    #[command(description = "start the bot.")]
+    Start,
+    #[command(description = "display this text.")]
+    Help,
+    #[command(description = "display the status of the wallet.")]
+    Status,
+    #[command(description = "display your balance.")]
+    Balance,
+    #[command(description = "display your deposit address.")]
+    Deposit,
+    #[command(description = "withdraw from your balance.", parse_with = "split")]
+    Withdraw { address: String, amount: f64 },
+    #[command(description = "tip the user to which you reply")]
+    Tip { amount: f64 },
+}
+
+impl TelegramCommand {
+    pub fn allow_public(&self) -> bool {
+        match self {
+            TelegramCommand::Tip { amount: _ } => true,
+            _ => false
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut config = Config::parse();
 
+    // Init wallet service
     let service = WalletServiceImpl::new(config.wallet_name, config.password, config.daemon_address, config.network).await?;
-    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
 
-    // Create the framework
-    let framework = {
-        let service = service.clone();
-        poise::Framework::builder()
-            .options(poise::FrameworkOptions {
-                commands: vec![status(), balance(), deposit(), withdraw(), tip()],
-                ..Default::default()
-            })
-            .setup(|ctx, _ready, framework| {
-                Box::pin(async move {
-                    poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                    Ok(service)
+    // Init discord bot
+    let mut discord_client = {
+        let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
+    
+        // Create the framework
+        let framework = {
+            let service = service.clone();
+            poise::Framework::builder()
+                .options(poise::FrameworkOptions {
+                    commands: vec![status(), balance(), deposit(), withdraw(), tip()],
+                    ..Default::default()
                 })
-            })
-            .build()
+                .setup(|ctx, _ready, framework| {
+                    Box::pin(async move {
+                        poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                        Ok(service)
+                    })
+                })
+                .build()
+        };
+    
+        // Create the client using token and intents
+        ClientBuilder::new(config.discord_token, intents)
+            .framework(framework)
+            .await?
     };
 
-    // Create the client using token and intents
-    let mut client = ClientBuilder::new(config.token, intents)
-        .framework(framework)
-        .await?;
+    // Telegram bot
+    let (telegram_client, bot) = {
+        let bot = Bot::new(config.telegram_token);
+        let instance = bot.clone();
+        let service = service.clone();
+        let handle = tokio::spawn(async move {
+            let handler = Update::filter_message()
+                .branch(
+                    dptree::entry()
+                        .filter_command::<TelegramCommand>()
+                        .endpoint(telegram_handler)
+                );
+    
+            Dispatcher::builder(bot, handler)
+                .dependencies(dptree::deps![service])
+                .enable_ctrlc_handler()
+                .build()
+                .dispatch().await
+        });
+
+        (handle, instance)
+    };
 
     // start the service
-    Arc::clone(&service).start(client.http.clone()).await?;
+    Arc::clone(&service).start(discord_client.http.clone(), bot).await?;
 
     config.logs_modules.push(ModuleConfig { module: "serenity".to_string(), level: LogLevel::Warn });
     let prompt = Prompt::new(config.log_level, &config.logs_path, &config.filename_log, config.disable_file_logging, config.disable_file_log_date_based, config.disable_log_color, !config.disable_interactive_mode, config.logs_modules, config.file_log_level)?;
@@ -152,10 +228,13 @@ async fn main() -> Result<()> {
 
     tokio::select! {
         // start listening for events by starting a single shard
-        res = client.start() => {
+        res = discord_client.start() => {
             if let Err(e) = res {
                 error!("An error occurred while running the client: {:?}", e);
             }
+        },
+        _ = telegram_client => {
+            error!("Telegram client stopped");
         },
         res = prompt.start(Duration::from_millis(1000), Box::new(async_handler!(prompt_message_builder)), Some(&command_manager)) => {
             if let Err(e) = res {
@@ -172,6 +251,7 @@ async fn prompt_message_builder(_: &Prompt, _: Option<&CommandManager>) -> Resul
     Ok("XELIS Tip Bot >>".to_string())
 }
 
+// Rescan CLI command
 async fn rescan(manager: &CommandManager, _: ArgumentManager) -> Result<(), CommandError> {
     let context = manager.get_context().lock()?;
     let service: &WalletService = context.get()?;
@@ -197,11 +277,11 @@ async fn status(ctx: Context<'_>) -> Result<(), Error> {
 
     let embed = CreateEmbed::default()
         .title("Status")
-        .field("Wallet Balance: ", format_xelis(balance), false)
-        .field("Total Users Balance: ", format_xelis(total_balance), false)
-        .field("Synced TopoHeight: ", topoheight.to_string(), false)
-        .field("Network: ", network.to_string(), false)
-        .field("Is Online: ", online.to_string(), false)
+        .field("Wallet Balance", format_xelis(balance), false)
+        .field("Total Users Balance", format_xelis(total_balance), false)
+        .field("Synced TopoHeight", topoheight.to_string(), false)
+        .field("Network", network.to_string(), false)
+        .field("Is Online", online.to_string(), false)
         .thumbnail(ICON)
         .colour(COLOR);
     let mut reply = CreateReply::default()
@@ -223,7 +303,7 @@ async fn status(ctx: Context<'_>) -> Result<(), Error> {
 async fn balance(ctx: Context<'_>) -> Result<(), Error> {
     // Retrieve balance for user
     let service = ctx.data();
-    let balance = service.get_balance_for_user(ctx.author()).await;
+    let balance = service.get_balance_for_user(&UserApplication::Discord(ctx.author().id.into())).await;
 
     let embed = CreateEmbed::default()
         .title("Balance")
@@ -249,7 +329,7 @@ async fn balance(ctx: Context<'_>) -> Result<(), Error> {
 async fn deposit(ctx: Context<'_>) -> Result<(), Error> {
     // Retrieve address for user
     let service = ctx.data();
-    let address = service.get_address_for_user(ctx.author());
+    let address = service.get_address_for_user(&UserApplication::Discord(ctx.author().id.into()));
 
     let embed = CreateEmbed::default()
         .title("Deposit")
@@ -323,7 +403,7 @@ async fn withdraw(ctx: Context<'_>, address: String, amount: f64) -> Result<(), 
         }
     };
 
-    match service.withdraw(ctx.author(), to, amount).await {
+    match service.withdraw(&UserApplication::Discord(ctx.author().id.into()), to, amount).await {
         Ok(hash) => {
             ctx.send(CreateReply::default().ephemeral(ephemeral).embed(
                 CreateEmbed::default()
@@ -371,7 +451,7 @@ async fn tip(ctx: Context<'_>, #[description = "User to tip"] user: User, #[desc
     // Retrieve address for user
     let service = ctx.data();
 
-    match service.transfer(ctx.author(), &user, amount).await {
+    match service.transfer(&UserApplication::Discord(ctx.author().id.into()), &UserApplication::Discord(user.id.into()), amount).await {
         Ok(_) => {
             ctx.send(CreateReply::default().embed(
                 CreateEmbed::default()
@@ -393,6 +473,132 @@ async fn tip(ctx: Context<'_>, #[description = "User to tip"] user: User, #[desc
             ).await?;
         }
     };
+
+    Ok(())
+}
+
+// Handler for telegram bot
+async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: WalletService) -> Result<(), Error> {
+    if !cmd.allow_public() && !msg.chat.is_private() {
+        let from = msg.from().ok_or(TelegramError::NoUser)?;
+        let dm = ChatId(from.id.0 as i64);
+        bot.send_message(dm, "You can only use this command in private").await?;
+        return Ok(());
+    }
+
+    match cmd {
+        TelegramCommand::Start => {
+            TelegramMessage::new(&bot, msg.chat.id)
+                .title("Welcome")
+                .field("Welcome to the XELIS Tip Bot!", "You can use /help to see the available commands", false)
+                .send().await?;
+        }
+        TelegramCommand::Help => {
+            bot.send_message(msg.chat.id, TelegramCommand::descriptions().to_string()).await?;
+        },
+        TelegramCommand::Status => {
+            let balance = state.get_wallet_balance().await?;
+            let total_balance = state.get_total_users_balance().await?;
+            let topoheight = state.get_wallet_topoheight().await?;
+            let network = state.network();
+            let online = state.is_wallet_online().await;
+
+            TelegramMessage::new(&bot, msg.chat.id)
+                .title("Status")
+                .field("Wallet Balance", format_xelis(balance), false)
+                .field("Total Users Balance", format_xelis(total_balance), false)
+                .field("Synced TopoHeight", topoheight.to_string(), false)
+                .field("Network", network.to_string(), false)
+                .field("Is Online", online.to_string(), false)
+                .send().await?;
+        },
+        TelegramCommand::Balance => {
+            let from = msg.from().ok_or(TelegramError::NoUser)?;
+            let balance = state.get_balance_for_user(&UserApplication::Telegram(from.id.0)).await;
+
+            TelegramMessage::new(&bot, msg.chat.id)
+                .title("Balance")
+                .field("Your balance is", format_xelis(balance), false)
+                .send().await?;
+        },
+        TelegramCommand::Deposit => {
+            let from = msg.from().ok_or(TelegramError::NoUser)?;
+            let address = state.get_address_for_user(&UserApplication::Telegram(from.id.0));
+
+            TelegramMessage::new(&bot, msg.chat.id)
+                .title("Deposit")
+                .field("Your deposit address is", InlineCode::new(&address.to_string()), false)
+                .field("Please do not send any other coins than XELIS to this address", "", false)
+                .send().await?;
+        },
+        TelegramCommand::Withdraw { address, amount } => {
+            let from = msg.from().ok_or(TelegramError::NoUser)?;
+            let to = match Address::from_string(&address) {
+                Ok(address) => address,
+                Err(e) => {
+                    bot.send_message(msg.chat.id, format!("An error occured while withdrawing: {}", e)).await?;
+                    return Ok(());
+                }    
+            };
+
+            if to.is_mainnet() != state.network().is_mainnet() {
+                bot.send_message(msg.chat.id, "An error occured while withdrawing: Invalid network").await?;
+                return Ok(());
+            }
+
+            let amount = match from_xelis(amount.to_string()) {
+                Some(amount) => amount,
+                None => {
+                    bot.send_message(msg.chat.id, "An error occured while withdrawing: Invalid amount").await?;
+                    return Ok(());
+                }
+            };
+
+            match state.withdraw(&UserApplication::Telegram(from.id.0), to, amount).await {
+                Ok(hash) => {
+                    TelegramMessage::new(&bot, msg.chat.id)
+                        .title("Withdraw")
+                        .field("You have withdrawn", format!("{} XEL", format_xelis(amount)), false)
+                        .field("Transaction", InlineCode::new(&hash.to_string()), false)
+                        .send().await?;
+                },
+                Err(e) => {
+                    bot.send_message(msg.chat.id, format!("An error occured while withdrawing: {}", e)).await?;
+                }
+            };
+        },
+        TelegramCommand::Tip { amount } => {
+            let from = msg.from().ok_or(TelegramError::NoUser)?;
+            let dm = ChatId(from.id.0 as i64);
+            let amount = match from_xelis(amount.to_string()) {
+                Some(amount) => amount,
+                None => {
+                    bot.send_message(dm, "An error occured while tipping: Invalid amount").await?;
+                    return Ok(());
+                }
+            };
+
+            let to = msg.reply_to_message().and_then(|m| m.from()).ok_or(TelegramError::NoUser)?;
+
+            if to.is_bot || to.is_anonymous() || to.is_channel() {
+                bot.send_message(dm, "An error occured while tipping: Invalid user").await?;
+                return Ok(());
+            }
+
+            match state.transfer(&UserApplication::Telegram(from.id.0), &UserApplication::Telegram(to.id.0), amount).await {
+                Ok(_) => {
+                    TelegramMessage::new(&bot, msg.chat.id)
+                        .title("Tip")
+                        .field("You have tipped", format!("{} XEL", format_xelis(amount)), false)
+                        .field("To", format!("{} ({})", to.username.as_ref().unwrap_or(&to.first_name), to.id), false)
+                        .send().await?;
+                },
+                Err(e) => {
+                    bot.send_message(dm, format!("An error occured while tipping: {}", e)).await?;
+                }
+            };
+        }
+    }
 
     Ok(())
 }

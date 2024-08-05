@@ -14,3 +14,4 @@ xelis_common = { package = "xelis_common", git = "https://github.com/xelis-proje
 xelis_wallet = { package = "xelis_wallet", git = "https://github.com/xelis-project/xelis-blockchain.git", branch = "dev" }
 clap = { version = "4.5.2", features = ["derive"] }
 log = "0.4.22"
+teloxide = { version = "0.12", features = ["macros"] }
