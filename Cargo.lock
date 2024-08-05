@@ -567,7 +567,7 @@ dependencies = [
 [[package]]
 name = "bulletproofs"
 version = "5.0.2"
-source = "git+https://github.com/xelis-project/bulletproofs?branch=main#cd0d434ba5ae55e1b5417b5cf6d65922548df3ec"
+source = "git+https://github.com/xelis-project/bulletproofs?branch=main#d950e30eec804e27bf7bbb1853158c788acb3deb"
 dependencies = [
  "byteorder",
  "curve25519-dalek",
@@ -922,8 +922,8 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "4.1.2"
-source = "git+https://github.com/xelis-project/curve25519-dalek?branch=main#5fbf1fb147183280c508158a8151b8594fc04aee"
+version = "4.1.3"
+source = "git+https://github.com/xelis-project/curve25519-dalek?branch=main#e88fda2460720a9ef3995a4827cad93e8434c7a4"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -942,7 +942,7 @@ dependencies = [
 [[package]]
 name = "curve25519-dalek-derive"
 version = "0.1.1"
-source = "git+https://github.com/xelis-project/curve25519-dalek?branch=main#5fbf1fb147183280c508158a8151b8594fc04aee"
+source = "git+https://github.com/xelis-project/curve25519-dalek?branch=main#e88fda2460720a9ef3995a4827cad93e8434c7a4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3776,7 +3776,7 @@ dependencies = [
 [[package]]
 name = "xelis_common"
 version = "1.13.2"
-source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#7fb700186ac4151ec5f9ff9e195d50cc46976cc5"
+source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#601e88b7570c822589e645e41c4c12ba7e57b769"
 dependencies = [
  "actix-rt",
  "actix-web",
@@ -3819,7 +3819,7 @@ dependencies = [
 [[package]]
 name = "xelis_wallet"
 version = "1.13.2"
-source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#7fb700186ac4151ec5f9ff9e195d50cc46976cc5"
+source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#601e88b7570c822589e645e41c4c12ba7e57b769"
 dependencies = [
  "actix",
  "actix-web",
