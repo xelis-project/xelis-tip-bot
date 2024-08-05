@@ -399,7 +399,7 @@ impl WalletServiceImpl {
             let builder = TransactionTypeBuilder::Transfers(vec![TransferBuilder {
                     amount,
                     asset: XELIS_ASSET,
-                    destination: to,
+                    destination: to.clone(),
                     extra_data: None
                 }
             ]);
@@ -416,11 +416,14 @@ impl WalletServiceImpl {
 
         self.wallet.submit_transaction(&transaction).await?;
 
+        let tx_hash = transaction.hash();
+        info!("Withdrawing {} XEL to {} in TX {} from {:?}", format_xelis(amount), to, tx_hash, user);
+
         // Update balance
         storage.set_custom_data(BALANCES_TREE, &user.into(), &(balance - (fee + amount)).into())?;
         state.apply_changes(&mut storage).await?;
 
-        Ok(transaction.hash())
+        Ok(tx_hash)
     }
 
     // Get the network of the wallet
