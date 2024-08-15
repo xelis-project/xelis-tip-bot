@@ -35,6 +35,7 @@ use xelis_common::{
 };
 use xelis_wallet::{
     error::WalletError,
+    precomputed_tables,
     storage::EncryptedStorage,
     wallet::{Event, Wallet}
 };
@@ -127,7 +128,7 @@ pub struct Deposit {
 impl WalletServiceImpl {
     // Create a new wallet service
     pub async fn new(name: String, password: String, daemon_address: String, network: Network) -> Result<WalletService> {
-        let precomputed_tables = Wallet::read_or_generate_precomputed_tables(None, NoOpProgressTableGenerationReportFunction)?;
+        let precomputed_tables = precomputed_tables::read_or_generate_precomputed_tables(None, NoOpProgressTableGenerationReportFunction).await?;
 
         let wallet = if Path::new(&name).is_dir() {
             Wallet::open(name, password, network, precomputed_tables)?
@@ -410,7 +411,7 @@ impl WalletServiceImpl {
                 return Err(ServiceError::NotEnoughFundsForFee(fee));
             }
 
-            let (state, transaction) = self.wallet.create_transaction_with_storage(&storage, builder, FeeBuilder::Value(fee)).await?;
+            let (state, transaction) = self.wallet.create_transaction_with_storage(&storage, builder, FeeBuilder::Value(fee), None).await?;
             (balance, fee, state, transaction)
         };
 
@@ -465,7 +466,8 @@ impl WalletServiceImpl {
                 destination: to.clone(),
                 extra_data: None
             }]),
-            FeeBuilder::Value(fee)
+            FeeBuilder::Value(fee),
+            None
         ).await?;
 
         self.wallet.submit_transaction(&transaction).await?;
