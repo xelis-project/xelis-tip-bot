@@ -256,7 +256,7 @@ impl WalletServiceImpl {
 
         // Receiver for stable topoheight changes
         let mut stable_topoheight_receiver = {
-            let lock = self.wallet.get_network_handler().await;
+            let lock = self.wallet.get_network_handler();
             let network_handler = lock.lock().await;
 
             if let Some(network_handler) = network_handler.as_ref() {
