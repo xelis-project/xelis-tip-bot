@@ -329,7 +329,7 @@ async fn withdraw_cmd(manager: &CommandManager, mut args: ArgumentManager) -> Re
     if let Err(e) = service.withdraw_to(address, amount).await {
         manager.error(format!("An error occurred while withdrawing all: {}", e.to_string()));
     } else {
-        manager.message("All balance has been withdrawn");
+        manager.message("Amount has been withdrawn");
     }
 
     Ok(())
