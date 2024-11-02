@@ -225,6 +225,7 @@ async fn main() -> Result<()> {
     command_manager.add_command(Command::new("rescan", "Rescan the wallet", CommandHandler::Async(async_handler!(rescan))))?;
     command_manager.add_command(Command::new("clear_balances", "Clear all balances", CommandHandler::Async(async_handler!(clear_balances))))?;
     command_manager.add_command(Command::with_required_arguments("add_balance_discord", "Add balance to a discord user", vec![Arg::new("user_id", ArgType::Number), Arg::new("amount", ArgType::String)], CommandHandler::Async(async_handler!(add_balance_discord))))?;
+    command_manager.add_command(Command::with_required_arguments("withdraw", "Withdraw an amount to an address", vec![Arg::new("address", ArgType::String), Arg::new("amount", ArgType::String)], CommandHandler::Async(async_handler!(withdraw_cmd))))?;
     command_manager.add_command(Command::with_required_arguments("withdraw_all", "Withdraw the whole balance to an address", vec![Arg::new("address", ArgType::String)], CommandHandler::Async(async_handler!(withdraw_all))))?;
 
     command_manager.display_commands()?;
@@ -313,6 +314,27 @@ async fn withdraw_all(manager: &CommandManager, mut args: ArgumentManager) -> Re
 
     Ok(())
 }
+
+// Withdraw all balance
+async fn withdraw_cmd(manager: &CommandManager, mut args: ArgumentManager) -> Result<(), CommandError> {
+    let context = manager.get_context().lock()?;
+    let service: &WalletService = context.get()?;
+    let address = args.get_value("address")?.to_string_value()?;
+
+    let amount = args.get_value("amount")?.to_string_value()?;
+    let amount = from_xelis(amount).ok_or_else(|| CommandError::InvalidArgument("amount".to_string()))?;
+
+    let address = Address::from_string(&address).map_err(|e| CommandError::InvalidArgument(e.to_string()))?;
+
+    if let Err(e) = service.withdraw_to(address, amount).await {
+        manager.error(format!("An error occurred while withdrawing all: {}", e.to_string()));
+    } else {
+        manager.message("All balance has been withdrawn");
+    }
+
+    Ok(())
+}
+
 
 /// See the status of the wallet
 #[poise::command(slash_command, broadcast_typing)]

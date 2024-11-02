@@ -449,8 +449,17 @@ impl WalletServiceImpl {
 
     // Withdraw all XEL from the service to an address
     pub async fn withdraw_all(&self, to: Address) -> Result<(), ServiceError> {
+        let amount = {
+            let storage = self.wallet.get_storage().read().await;
+            storage.get_plaintext_balance_for(&XELIS_ASSET).await.unwrap_or(0)
+        };
+
+        self.withdraw_to(to, amount).await
+    }
+
+    // Withdraw XEL from the service to an address
+    pub async fn withdraw_to(&self, to: Address, amount: u64) -> Result<(), ServiceError> {
         let mut storage = self.wallet.get_storage().write().await;
-        let amount = storage.get_plaintext_balance_for(&XELIS_ASSET).await.unwrap_or(0);
         let fee = self.wallet.estimate_fees(TransactionTypeBuilder::Transfers(vec![TransferBuilder {
             amount,
             asset: XELIS_ASSET,
