@@ -4,7 +4,8 @@ use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc
-    }
+    },
+    time::Duration
 };
 
 use anyhow::Result;
@@ -159,6 +160,8 @@ impl WalletServiceImpl {
                 if let Err(e) = self.event_loop(&http, &bot).await {
                     error!("Error in event loop: {:?}", e);
                 }
+
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
         });
 
