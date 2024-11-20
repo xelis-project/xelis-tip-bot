@@ -3347,14 +3347,26 @@ dependencies = [
 
 [[package]]
 name = "tokio_with_wasm"
-version = "0.6.0"
-source = "git+https://github.com/Slixe/tokio-with-wasm?branch=main#ab485984922265d7d224f89b311a08d1ef79400f"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c33ccdd8192685c79013359bf42e1c2649ed6bf11e8fa05f1f7f2acc7c71368"
 dependencies = [
  "js-sys",
  "tokio",
+ "tokio_with_wasm_proc",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "tokio_with_wasm_proc"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ff8fa1b71e329058cc97c093972aeb51dd7e658bd5197f294665639194bbc4c"
+dependencies = [
+ "quote",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -3981,7 +3993,7 @@ dependencies = [
 [[package]]
 name = "xelis_common"
 version = "1.15.0"
-source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#73d45e6e65bda5312da2e79f65b9c0192ee35a07"
+source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=network-upgrade#1741c351d14bc553f02d66f7ecf8781af284e32e"
 dependencies = [
  "actix-rt",
  "actix-web",
@@ -4024,7 +4036,7 @@ dependencies = [
 [[package]]
 name = "xelis_wallet"
 version = "1.15.0"
-source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#73d45e6e65bda5312da2e79f65b9c0192ee35a07"
+source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=network-upgrade#1741c351d14bc553f02d66f7ecf8781af284e32e"
 dependencies = [
  "actix",
  "actix-web",
@@ -4035,9 +4047,9 @@ dependencies = [
  "base64 0.22.1",
  "bytemuck",
  "chacha20poly1305",
+ "chrono",
  "clap",
  "crc32fast",
- "fern",
  "hex",
  "indexmap",
  "lazy_static",
@@ -4048,7 +4060,6 @@ dependencies = [
  "serde_json",
  "sled",
  "thiserror",
- "tokio",
  "wasm-bindgen-futures",
  "web-sys",
  "xelis_common",

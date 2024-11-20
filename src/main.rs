@@ -161,7 +161,7 @@ async fn main() -> Result<()> {
     let mut config = Config::parse();
 
     // Init wallet service
-    let service = WalletServiceImpl::new(config.wallet_name, config.password, config.daemon_address, config.network).await?;
+    let service = WalletServiceImpl::new(&config.wallet_name, &config.password, config.daemon_address, config.network).await?;
 
     // Init discord bot
     let mut discord_client = {

@@ -128,8 +128,8 @@ pub struct Deposit {
 
 impl WalletServiceImpl {
     // Create a new wallet service
-    pub async fn new(name: String, password: String, daemon_address: String, network: Network) -> Result<WalletService> {
-        let precomputed_tables = precomputed_tables::read_or_generate_precomputed_tables(None, NoOpProgressTableGenerationReportFunction).await?;
+    pub async fn new(name: &str, password: &str, daemon_address: String, network: Network) -> Result<WalletService> {
+        let precomputed_tables = precomputed_tables::read_or_generate_precomputed_tables(None, precomputed_tables::L1_FULL, NoOpProgressTableGenerationReportFunction, true).await?;
 
         let wallet = if Path::new(&name).is_dir() {
             Wallet::open(name, password, network, precomputed_tables)?

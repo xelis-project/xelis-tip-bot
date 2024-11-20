@@ -10,8 +10,8 @@ tokio = { version = "1.25", features = ["macros", "signal", "time", "sync"] }
 poise = "0.6.1-rc1"
 anyhow = "1"
 thiserror = "1"
-xelis_common = { package = "xelis_common", git = "https://github.com/xelis-project/xelis-blockchain.git", branch = "dev", features = ["prompt"] }
-xelis_wallet = { package = "xelis_wallet", git = "https://github.com/xelis-project/xelis-blockchain.git", branch = "dev" }
+xelis_common = { package = "xelis_common", git = "https://github.com/xelis-project/xelis-blockchain.git", branch = "network-upgrade", features = ["prompt"] }
+xelis_wallet = { package = "xelis_wallet", git = "https://github.com/xelis-project/xelis-blockchain.git", branch = "network-upgrade" }
 clap = { version = "4.5.2", features = ["derive"] }
 log = "0.4.22"
 teloxide = { version = "0.12", features = ["macros"] }
