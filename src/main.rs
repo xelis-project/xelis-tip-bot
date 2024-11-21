@@ -560,7 +560,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
 
     match cmd {
         TelegramCommand::Start => {
-            TelegramMessage::new(&bot, msg.chat.id)
+            TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                 .title("Welcome")
                 .field("Welcome to the XELIS Tip Bot!", "You can use /help to see the available commands", false)
                 .send().await?;
@@ -575,7 +575,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
             let network = state.network();
             let online = state.is_wallet_online().await;
 
-            TelegramMessage::new(&bot, msg.chat.id)
+            TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                 .title("Status")
                 .field("Wallet Balance", format_xelis(balance), false)
                 .field("Total Users Balance", format_xelis(total_balance), false)
@@ -588,7 +588,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
             let from = msg.from().ok_or(TelegramError::NoUser)?;
             let balance = state.get_balance_for_user(&UserApplication::Telegram(from.id.0)).await;
 
-            TelegramMessage::new(&bot, msg.chat.id)
+            TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                 .title("Balance")
                 .field("Your balance is", format_xelis(balance), false)
                 .send().await?;
@@ -597,7 +597,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
             let from = msg.from().ok_or(TelegramError::NoUser)?;
             let address = state.get_address_for_user(&UserApplication::Telegram(from.id.0));
 
-            TelegramMessage::new(&bot, msg.chat.id)
+            TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                 .title("Deposit")
                 .field("Your deposit address is", InlineCode::new(&address.to_string()), false)
                 .field("Please do not send any other coins than XELIS to this address", "", false)
@@ -628,7 +628,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
 
             match state.withdraw(&UserApplication::Telegram(from.id.0), to, amount).await {
                 Ok(hash) => {
-                    TelegramMessage::new(&bot, msg.chat.id)
+                    TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                         .title("Withdraw")
                         .field("You have withdrawn", format!("{} XEL", format_xelis(amount)), false)
                         .field("Transaction", InlineCode::new(&hash.to_string()), false)
@@ -659,7 +659,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
 
             match state.transfer(&UserApplication::Telegram(from.id.0), &UserApplication::Telegram(to.id.0), amount).await {
                 Ok(_) => {
-                    TelegramMessage::new(&bot, msg.chat.id)
+                    TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                         .title("Tip")
                         .field("You have tipped", format!("{} XEL", format_xelis(amount)), false)
                         .field("To", format!("{} ({})", to.username.as_ref().unwrap_or(&to.first_name), to.id), false)

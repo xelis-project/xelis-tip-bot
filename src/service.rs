@@ -186,7 +186,7 @@ impl WalletServiceImpl {
 
     // Notify a telegram user of a deposit
     async fn notify_telegram_deposit(&self, bot: &Bot, user_id: u64, amount: u64, transaction_hash: &Hash) -> Result<()> {
-        TelegramMessage::new(&bot, ChatId(user_id as i64))
+        TelegramMessage::new(&bot, ChatId(user_id as i64), None)
             .title("Deposit")
             .field("You received", format!("{} XEL", format_xelis(amount)), false)
             .field("Transaction", transaction_hash.to_string(), false)
