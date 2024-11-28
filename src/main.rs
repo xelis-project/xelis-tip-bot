@@ -25,7 +25,7 @@ use service::{
 use teloxide::{
     dispatching::{HandlerExt, UpdateFilterExt},
     prelude::{dptree, Dispatcher, Requester},
-    types::{ChatId, Message, Update},
+    types::{Message, Update},
     utils::command::BotCommands,
     Bot
 };
@@ -553,8 +553,7 @@ async fn tip(ctx: Context<'_>, #[description = "User to tip"] user: User, #[desc
 async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: WalletService) -> Result<(), Error> {
     if !cmd.allow_public() && !msg.chat.is_private() {
         let from = msg.from().ok_or(TelegramError::NoUser)?;
-        let dm = ChatId(from.id.0 as i64);
-        bot.send_message(dm, "You can only use this command in private").await?;
+        bot.send_message(from.id, "You can only use this command in private").await?;
         return Ok(());
     }
 
@@ -641,7 +640,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
         },
         TelegramCommand::Tip { amount } => {
             let from = msg.from().ok_or(TelegramError::NoUser)?;
-            let dm = ChatId(from.id.0 as i64);
+            let dm = from.id;
             let amount = match from_xelis(amount.to_string()) {
                 Some(amount) => amount,
                 None => {
