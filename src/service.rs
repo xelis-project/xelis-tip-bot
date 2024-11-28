@@ -225,6 +225,7 @@ impl WalletServiceImpl {
                                 storage.set_custom_data(HISTORY_TREE, &tx_key, &(&user_id).into())?;
                             }
 
+                            info!("User {:?} received {} XEL in TX {}", user_id, format_xelis(amount), transaction.hash);
                             // Notify user
                             match user_id {
                                 UserApplication::Telegram(user_id) => {
@@ -238,6 +239,8 @@ impl WalletServiceImpl {
                                     }
                                 }
                             }
+                        } else {
+                            warn!("Invalid user application data: {:?}", data);
                         }
                     }
                 }
