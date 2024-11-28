@@ -414,7 +414,7 @@ impl WalletServiceImpl {
                 return Err(ServiceError::NotEnoughFundsForFee(fee));
             }
 
-            let (state, transaction) = self.wallet.create_transaction_with_storage(&storage, builder, FeeBuilder::Value(fee), None).await?;
+            let (transaction, state) = self.wallet.create_transaction_with_storage(&storage, builder, FeeBuilder::Value(fee)).await?;
             (balance, fee, state, transaction)
         };
 
@@ -470,7 +470,7 @@ impl WalletServiceImpl {
             extra_data: None
         }])).await?;
 
-        let (mut state, transaction) = self.wallet.create_transaction_with_storage(
+        let (transaction, mut state) = self.wallet.create_transaction_with_storage(
             &storage,
             TransactionTypeBuilder::Transfers(vec![TransferBuilder {
                 amount: amount - fee,
@@ -479,7 +479,6 @@ impl WalletServiceImpl {
                 extra_data: None
             }]),
             FeeBuilder::Value(fee),
-            None
         ).await?;
 
         self.wallet.submit_transaction(&transaction).await?;

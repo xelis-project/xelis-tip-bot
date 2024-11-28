@@ -49,7 +49,7 @@ use xelis_common::{
     utils::{format_xelis, from_xelis}
 };
 use xelis_wallet::config::DEFAULT_DAEMON_ADDRESS;
-use log::error;
+use log::{debug, error};
 
 // Context type for poise with our data type
 type Context<'a> = poise::Context<'a, WalletService, Error>;
@@ -645,6 +645,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
             let amount = match from_xelis(amount.to_string()) {
                 Some(amount) => amount,
                 None => {
+                    debug!("Invalid amount");
                     bot.send_message(dm, "An error occured while tipping: Invalid amount").await?;
                     return Ok(());
                 }
@@ -653,12 +654,14 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
             let to = msg.reply_to_message().and_then(|m| m.from()).ok_or(TelegramError::NoUser)?;
 
             if to.is_bot || to.is_anonymous() || to.is_channel() {
+                debug!("Invalid user");
                 bot.send_message(dm, "An error occured while tipping: Invalid user").await?;
                 return Ok(());
             }
 
             match state.transfer(&UserApplication::Telegram(from.id.0), &UserApplication::Telegram(to.id.0), amount).await {
                 Ok(_) => {
+                    debug!("Tipped {} XEL to {} (chat id: {}, thread: {:?})", format_xelis(amount), to.id, msg.chat.id, msg.thread_id);
                     TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                         .title("Tip")
                         .field("You have tipped", format!("{} XEL", format_xelis(amount)), false)
@@ -666,6 +669,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
                         .send().await?;
                 },
                 Err(e) => {
+                    debug!("An error occured while tipping: {}", e);
                     bot.send_message(dm, format!("An error occured while tipping: {}", e)).await?;
                 }
             };
