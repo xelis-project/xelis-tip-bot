@@ -25,7 +25,7 @@ use service::{
 use teloxide::{
     dispatching::{HandlerExt, UpdateFilterExt},
     prelude::{dptree, Dispatcher, Requester},
-    types::{ChatId, Message, Update},
+    types::{Message, Update},
     utils::command::BotCommands,
     Bot
 };
@@ -49,7 +49,7 @@ use xelis_common::{
     utils::{format_xelis, from_xelis}
 };
 use xelis_wallet::config::DEFAULT_DAEMON_ADDRESS;
-use log::error;
+use log::{debug, error};
 
 // Context type for poise with our data type
 type Context<'a> = poise::Context<'a, WalletService, Error>;
@@ -553,14 +553,13 @@ async fn tip(ctx: Context<'_>, #[description = "User to tip"] user: User, #[desc
 async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: WalletService) -> Result<(), Error> {
     if !cmd.allow_public() && !msg.chat.is_private() {
         let from = msg.from().ok_or(TelegramError::NoUser)?;
-        let dm = ChatId(from.id.0 as i64);
-        bot.send_message(dm, "You can only use this command in private").await?;
+        bot.send_message(from.id, "You can only use this command in private").await?;
         return Ok(());
     }
 
     match cmd {
         TelegramCommand::Start => {
-            TelegramMessage::new(&bot, msg.chat.id)
+            TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                 .title("Welcome")
                 .field("Welcome to the XELIS Tip Bot!", "You can use /help to see the available commands", false)
                 .send().await?;
@@ -575,7 +574,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
             let network = state.network();
             let online = state.is_wallet_online().await;
 
-            TelegramMessage::new(&bot, msg.chat.id)
+            TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                 .title("Status")
                 .field("Wallet Balance", format_xelis(balance), false)
                 .field("Total Users Balance", format_xelis(total_balance), false)
@@ -588,7 +587,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
             let from = msg.from().ok_or(TelegramError::NoUser)?;
             let balance = state.get_balance_for_user(&UserApplication::Telegram(from.id.0)).await;
 
-            TelegramMessage::new(&bot, msg.chat.id)
+            TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                 .title("Balance")
                 .field("Your balance is", format_xelis(balance), false)
                 .send().await?;
@@ -597,7 +596,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
             let from = msg.from().ok_or(TelegramError::NoUser)?;
             let address = state.get_address_for_user(&UserApplication::Telegram(from.id.0));
 
-            TelegramMessage::new(&bot, msg.chat.id)
+            TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                 .title("Deposit")
                 .field("Your deposit address is", InlineCode::new(&address.to_string()), false)
                 .field("Please do not send any other coins than XELIS to this address", "", false)
@@ -628,7 +627,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
 
             match state.withdraw(&UserApplication::Telegram(from.id.0), to, amount).await {
                 Ok(hash) => {
-                    TelegramMessage::new(&bot, msg.chat.id)
+                    TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                         .title("Withdraw")
                         .field("You have withdrawn", format!("{} XEL", format_xelis(amount)), false)
                         .field("Transaction", InlineCode::new(&hash.to_string()), false)
@@ -641,10 +640,11 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
         },
         TelegramCommand::Tip { amount } => {
             let from = msg.from().ok_or(TelegramError::NoUser)?;
-            let dm = ChatId(from.id.0 as i64);
+            let dm = from.id;
             let amount = match from_xelis(amount.to_string()) {
                 Some(amount) => amount,
                 None => {
+                    debug!("Invalid amount");
                     bot.send_message(dm, "An error occured while tipping: Invalid amount").await?;
                     return Ok(());
                 }
@@ -653,19 +653,22 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
             let to = msg.reply_to_message().and_then(|m| m.from()).ok_or(TelegramError::NoUser)?;
 
             if to.is_bot || to.is_anonymous() || to.is_channel() {
+                debug!("Invalid user");
                 bot.send_message(dm, "An error occured while tipping: Invalid user").await?;
                 return Ok(());
             }
 
             match state.transfer(&UserApplication::Telegram(from.id.0), &UserApplication::Telegram(to.id.0), amount).await {
                 Ok(_) => {
-                    TelegramMessage::new(&bot, msg.chat.id)
+                    debug!("Tipped {} XEL to {} (chat id: {}, thread: {:?})", format_xelis(amount), to.id, msg.chat.id, msg.thread_id);
+                    TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                         .title("Tip")
                         .field("You have tipped", format!("{} XEL", format_xelis(amount)), false)
                         .field("To", format!("{} ({})", to.username.as_ref().unwrap_or(&to.first_name), to.id), false)
                         .send().await?;
                 },
                 Err(e) => {
+                    debug!("An error occured while tipping: {}", e);
                     bot.send_message(dm, format!("An error occured while tipping: {}", e)).await?;
                 }
             };

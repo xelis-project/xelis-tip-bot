@@ -4,7 +4,8 @@ pub struct TelegramMessage<'a> {
     title: Option<String>,
     lines: Vec<String>,
     bot: &'a Bot,
-    chat_id: ChatId
+    chat_id: ChatId,
+    thread_id: Option<i32>
 }
 
 pub struct InlineCode<'a> {
@@ -32,12 +33,13 @@ impl Into<String> for InlineCode<'_> {
 const NEW_LINE: &str = "\n";
 
 impl<'a> TelegramMessage<'a> {
-    pub fn new(bot: &'a Bot, chat_id: ChatId) -> Self {
+    pub fn new(bot: &'a Bot, chat_id: ChatId, thread_id: Option<i32>) -> Self {
         TelegramMessage {
             title: None,
             lines: Vec::new(),
             bot,
-            chat_id
+            chat_id,
+            thread_id
         }
     }
 
@@ -71,7 +73,11 @@ impl<'a> TelegramMessage<'a> {
     }
 
     pub fn send(&self) -> JsonRequest<SendMessage> {
-        self.bot.send_message(self.chat_id, self.to_string())
-            .parse_mode(ParseMode::Html)
+        let mut msg = self.bot.send_message(self.chat_id, self.to_string());
+        if let Some(thread_id) = self.thread_id {
+            msg = msg.message_thread_id(thread_id);
+        }
+    
+        msg.parse_mode(ParseMode::Html)
     }
 }

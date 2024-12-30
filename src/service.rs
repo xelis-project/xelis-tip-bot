@@ -186,7 +186,7 @@ impl WalletServiceImpl {
 
     // Notify a telegram user of a deposit
     async fn notify_telegram_deposit(&self, bot: &Bot, user_id: u64, amount: u64, transaction_hash: &Hash) -> Result<()> {
-        TelegramMessage::new(&bot, ChatId(user_id as i64))
+        TelegramMessage::new(&bot, ChatId(user_id as i64), None)
             .title("Deposit")
             .field("You received", format!("{} XEL", format_xelis(amount)), false)
             .field("Transaction", transaction_hash.to_string(), false)
@@ -225,6 +225,7 @@ impl WalletServiceImpl {
                                 storage.set_custom_data(HISTORY_TREE, &tx_key, &(&user_id).into())?;
                             }
 
+                            info!("User {:?} received {} XEL in TX {}", user_id, format_xelis(amount), transaction.hash);
                             // Notify user
                             match user_id {
                                 UserApplication::Telegram(user_id) => {
@@ -238,6 +239,8 @@ impl WalletServiceImpl {
                                     }
                                 }
                             }
+                        } else {
+                            warn!("Invalid user application data: {:?}", data);
                         }
                     }
                 }
