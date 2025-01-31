@@ -103,6 +103,11 @@ pub struct Config {
     /// Disable the usage of colors in log
     #[clap(long)]
     disable_log_color: bool,
+    /// Enable the log file auto compression
+    /// If enabled, the log file will be compressed every day
+    /// This will only work if the log file is enabled
+    #[clap(long)]
+    auto_compress_logs: bool,
     /// Disable terminal interactive mode
     /// You will not be able to write CLI commands in it or to have an updated prompt
     #[clap(long)]
@@ -217,7 +222,19 @@ async fn main() -> Result<()> {
     Arc::clone(&service).start(discord_client.http.clone(), bot).await?;
 
     config.logs_modules.push(ModuleConfig { module: "serenity".to_string(), level: LogLevel::Warn });
-    let prompt = Prompt::new(config.log_level, &config.logs_path, &config.filename_log, config.disable_file_logging, config.disable_file_log_date_based, config.disable_log_color, !config.disable_interactive_mode, config.logs_modules, config.file_log_level)?;
+    let prompt = Prompt::new(
+        config.log_level,
+        &config.logs_path,
+        &config.filename_log,
+        config.disable_file_logging,
+        config.disable_file_log_date_based,
+        config.disable_log_color,
+        config.auto_compress_logs,
+        !config.disable_interactive_mode,
+        config.logs_modules,
+        config.file_log_level
+    )?;
+
     let command_manager = CommandManager::new(prompt.clone());
     command_manager.store_in_context(service)?;
 
