@@ -569,7 +569,7 @@ async fn tip(ctx: Context<'_>, #[description = "User to tip"] user: User, #[desc
 // Handler for telegram bot
 async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: WalletService) -> Result<(), Error> {
     if !cmd.allow_public() && !msg.chat.is_private() {
-        let from = msg.from().ok_or(TelegramError::NoUser)?;
+        let from = msg.from.ok_or(TelegramError::NoUser)?;
         bot.send_message(from.id, "You can only use this command in private").await?;
         return Ok(());
     }
@@ -601,7 +601,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
                 .send().await?;
         },
         TelegramCommand::Balance => {
-            let from = msg.from().ok_or(TelegramError::NoUser)?;
+            let from = msg.from.ok_or(TelegramError::NoUser)?;
             let balance = state.get_balance_for_user(&UserApplication::Telegram(from.id.0)).await;
 
             TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
@@ -610,7 +610,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
                 .send().await?;
         },
         TelegramCommand::Deposit => {
-            let from = msg.from().ok_or(TelegramError::NoUser)?;
+            let from = msg.from.ok_or(TelegramError::NoUser)?;
             let address = state.get_address_for_user(&UserApplication::Telegram(from.id.0));
 
             TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
@@ -620,7 +620,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
                 .send().await?;
         },
         TelegramCommand::Withdraw { address, amount } => {
-            let from = msg.from().ok_or(TelegramError::NoUser)?;
+            let from = msg.from.ok_or(TelegramError::NoUser)?;
             let to = match Address::from_string(&address) {
                 Ok(address) => address,
                 Err(e) => {
@@ -656,7 +656,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
             };
         },
         TelegramCommand::Tip { amount } => {
-            let from = msg.from().ok_or(TelegramError::NoUser)?;
+            let from = msg.from.as_ref().ok_or(TelegramError::NoUser)?;
             let dm = from.id;
             let amount = match from_xelis(amount.to_string()) {
                 Some(amount) => amount,
@@ -667,7 +667,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
                 }
             };
 
-            let to = msg.reply_to_message().and_then(|m| m.from()).ok_or(TelegramError::NoUser)?;
+            let to = msg.reply_to_message().and_then(|m| m.from.as_ref()).ok_or(TelegramError::NoUser)?;
 
             if to.is_bot || to.is_anonymous() || to.is_channel() {
                 debug!("Invalid user");

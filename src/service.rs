@@ -120,12 +120,6 @@ pub struct WalletServiceImpl {
     locked: AtomicBool,
 }
 
-pub struct Deposit {
-    pub user_id: u64,
-    pub amount: u64,
-    pub transaction_hash: Hash
-}
-
 impl WalletServiceImpl {
     // Create a new wallet service
     pub async fn new(name: &str, password: &str, daemon_address: String, network: Network) -> Result<WalletService> {
@@ -508,20 +502,5 @@ impl WalletServiceImpl {
     pub async fn rescan(&self) -> Result<(), ServiceError> {
         self.wallet.rescan(0, true).await?;
         Ok(())
-    }
-}
-
-impl Serializer for Deposit {
-    fn write(&self, writer: &mut Writer) {
-        writer.write_u64(&self.user_id);
-        writer.write_u64(&self.amount);
-        writer.write_hash(&self.transaction_hash);
-    }
-
-    fn read(reader: &mut Reader) -> Result<Self, ReaderError> {
-        let user_id = reader.read_u64()?;
-        let amount = reader.read_u64()?;
-        let transaction_hash = reader.read_hash()?;
-        Ok(Self { user_id, amount, transaction_hash })
     }
 }

@@ -1,11 +1,17 @@
-use teloxide::{payloads::{SendMessage, SendMessageSetters}, prelude::Requester, requests::JsonRequest, types::{ChatId, ParseMode}, Bot};
+use teloxide::{
+    Bot,
+    payloads::{SendMessage, SendMessageSetters},
+    prelude::Requester,
+    requests::JsonRequest,
+    types::{ChatId, ParseMode, ThreadId}
+};
 
 pub struct TelegramMessage<'a> {
     title: Option<String>,
     lines: Vec<String>,
     bot: &'a Bot,
     chat_id: ChatId,
-    thread_id: Option<i32>
+    thread_id: Option<ThreadId>
 }
 
 pub struct InlineCode<'a> {
@@ -33,7 +39,7 @@ impl Into<String> for InlineCode<'_> {
 const NEW_LINE: &str = "\n";
 
 impl<'a> TelegramMessage<'a> {
-    pub fn new(bot: &'a Bot, chat_id: ChatId, thread_id: Option<i32>) -> Self {
+    pub fn new(bot: &'a Bot, chat_id: ChatId, thread_id: Option<ThreadId>) -> Self {
         TelegramMessage {
             title: None,
             lines: Vec::new(),
