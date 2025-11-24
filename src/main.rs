@@ -613,7 +613,7 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
             let from = msg.from.ok_or(TelegramError::NoUser)?;
             let address = state.get_address_for_user(&UserApplication::Telegram(from.id.0));
 
-            TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
+            TelegramMessage::new(&bot, msg.chat.id, msg.thread_id.filter(|_| !msg.is_topic_message))
                 .title("Deposit")
                 .field("Your deposit address is", InlineCode::new(&address.to_string()), false)
                 .field("Please do not send any other coins than XELIS to this address", "", false)
@@ -676,7 +676,8 @@ async fn telegram_handler(bot: Bot, msg: Message, cmd: TelegramCommand, state: W
             }
 
             match state.transfer(&UserApplication::Telegram(from.id.0), &UserApplication::Telegram(to.id.0), amount).await {
-                Ok(_) => {
+                Ok(()) => {
+                    
                     debug!("Tipped {} XEL to {} (chat id: {}, thread: {:?})", format_xelis(amount), to.id, msg.chat.id, msg.thread_id);
                     TelegramMessage::new(&bot, msg.chat.id, msg.thread_id)
                         .title("Tip")
