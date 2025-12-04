@@ -44,9 +44,10 @@ use xelis_common::{
         LogLevel,
         ModuleConfig,
         Prompt,
-        PromptError
+        PromptError,
+        default_logs_datetime_format,
     },
-    utils::{format_xelis, from_xelis}
+    utils::{format_xelis, from_xelis, detect_available_parallelism}
 };
 use xelis_wallet::config::DEFAULT_DAEMON_ADDRESS;
 use log::{debug, error};
@@ -131,6 +132,19 @@ pub struct Config {
     /// Set the path for wallet storage to open/create a wallet at this location
     #[clap(long)]
     wallet_path: Option<String>,
+    /// Disable the ascii art at startup
+    #[clap(long)]
+    disable_ascii_art: bool,
+    /// Change the datetime format used by the logger
+    #[clap(long, default_value_t = default_logs_datetime_format())]
+    datetime_format: String,
+    /// How many threads we want to use
+    /// during ciphertext decryption
+    #[clap(long, default_value_t = detect_available_parallelism())]
+    pub n_decryption_threads: usize,
+    /// Concurrency configuration for Network Handler
+    #[clap(long, default_value_t = detect_available_parallelism())]
+    pub network_concurrency: usize,
 }
 
 #[derive(BotCommands, Clone)]
@@ -166,7 +180,14 @@ async fn main() -> Result<()> {
     let mut config = Config::parse();
 
     // Init wallet service
-    let service = WalletServiceImpl::new(&config.wallet_name, &config.password, config.daemon_address, config.network).await?;
+    let service = WalletServiceImpl::new(
+        &config.wallet_name,
+        &config.password,
+        config.daemon_address,
+        config.network,
+        config.n_decryption_threads,
+        config.network_concurrency
+    ).await?;
 
     // Init discord bot
     let mut discord_client = {
@@ -232,7 +253,9 @@ async fn main() -> Result<()> {
         config.auto_compress_logs,
         !config.disable_interactive_mode,
         config.logs_modules,
-        config.file_log_level
+        config.file_log_level,
+        true,
+        config.datetime_format,
     )?;
 
     let command_manager = CommandManager::new(prompt.clone());

@@ -58,11 +58,11 @@ impl Serializer for UserApplication {
         match self {
             UserApplication::Telegram(id) => {
                 writer.write_u8(0);
-                writer.write_u64(id);
+                id.write(writer);
             },
             UserApplication::Discord(id) => {
                 writer.write_u8(1);
-                writer.write_u64(id);
+                id.write(writer);
             }
         }
     }
@@ -122,13 +122,13 @@ pub struct WalletServiceImpl {
 
 impl WalletServiceImpl {
     // Create a new wallet service
-    pub async fn new(name: &str, password: &str, daemon_address: String, network: Network) -> Result<WalletService> {
+    pub async fn new(name: &str, password: &str, daemon_address: String, network: Network, n_threads_decryption: usize, network_concurrency: usize) -> Result<WalletService> {
         let precomputed_tables = precomputed_tables::read_or_generate_precomputed_tables(None, precomputed_tables::L1_FULL, NoOpProgressTableGenerationReportFunction, true).await?;
 
         let wallet = if Path::new(&name).is_dir() {
-            Wallet::open(name, password, network, precomputed_tables)?
+            Wallet::open(name, password, network, precomputed_tables, n_threads_decryption, network_concurrency)?
         } else {
-            Wallet::create(name, password, None, network, precomputed_tables)?
+            Wallet::create(name, password, None, network, precomputed_tables, n_threads_decryption, network_concurrency).await?
         };
 
         wallet.set_online_mode(&daemon_address, true).await?;
@@ -197,7 +197,7 @@ impl WalletServiceImpl {
                 // Check if there is any transfer that is for us
                 for transfer in transfers.iter().filter(|t| t.asset == XELIS_ASSET) {
                     if let Some(data) = &transfer.extra_data {
-                        if let Some(user_id) = data.data().as_value().and_then(|v| v.as_type::<UserApplication>()).ok() {
+                        if let Some(user_id) = data.data().and_then(|v| v.as_value().and_then(|v| v.as_type::<UserApplication>()).ok()) {
                             let amount = transfer.amount;
                             {
                                 let mut storage = self.wallet.get_storage().write().await;
@@ -326,7 +326,7 @@ impl WalletServiceImpl {
     pub async fn get_total_users_balance(&self) -> Result<u64> {
         let storage = self.wallet.get_storage().read().await;
         let mut total = 0;
-        for key in storage.get_custom_tree_keys(&BALANCES_TREE.to_string(), &None)? {
+        for key in storage.get_custom_tree_keys(&BALANCES_TREE.to_string(), &None, None, None)? {
             let user_id = key.to_type()?;
             debug!("Getting balance for discord key: {:?}", user_id);
             let balance: u64 = self.get_balance_internal(&storage, &user_id);
@@ -401,17 +401,25 @@ impl WalletServiceImpl {
                     amount,
                     asset: XELIS_ASSET,
                     destination: to.clone(),
-                    extra_data: None
+                    extra_data: None,
+                    encrypt_extra_data: true,
                 }
             ]);
 
-            let fee = self.wallet.estimate_fees(builder.clone()).await?;
+            let fee = self.wallet.estimate_fees(builder.clone(), Default::default(), Default::default()).await?;
             // Verify if he has enough with fees included
             if fee + amount > balance {
                 return Err(ServiceError::NotEnoughFundsForFee(fee));
             }
 
-            let (transaction, state) = self.wallet.create_transaction_with_storage(&storage, builder, FeeBuilder::Value(fee)).await?;
+            let (transaction, state) = self.wallet.create_transaction_with_storage(
+                &storage,
+                builder,
+                FeeBuilder::Fixed(fee),
+                Default::default(),
+                None
+            ).await?;
+
             (balance, fee, state, transaction)
         };
 
@@ -460,12 +468,17 @@ impl WalletServiceImpl {
     // Withdraw XEL from the service to an address
     pub async fn withdraw_to(&self, to: Address, amount: u64) -> Result<(), ServiceError> {
         let mut storage = self.wallet.get_storage().write().await;
-        let fee = self.wallet.estimate_fees(TransactionTypeBuilder::Transfers(vec![TransferBuilder {
-            amount,
-            asset: XELIS_ASSET,
-            destination: to.clone(),
-            extra_data: None
-        }])).await?;
+        let fee = self.wallet.estimate_fees(
+            TransactionTypeBuilder::Transfers(vec![TransferBuilder {
+                amount,
+                asset: XELIS_ASSET,
+                destination: to.clone(),
+                extra_data: None,
+                encrypt_extra_data: true,
+            }]),
+            Default::default(),
+            Default::default()
+        ).await?;
 
         let (transaction, mut state) = self.wallet.create_transaction_with_storage(
             &storage,
@@ -473,9 +486,12 @@ impl WalletServiceImpl {
                 amount: amount - fee,
                 asset: XELIS_ASSET,
                 destination: to.clone(),
-                extra_data: None
+                extra_data: None,
+                encrypt_extra_data: true,
             }]),
-            FeeBuilder::Value(fee),
+            FeeBuilder::Fixed(fee),
+            Default::default(),
+            None
         ).await?;
 
         self.wallet.submit_transaction(&transaction).await?;
