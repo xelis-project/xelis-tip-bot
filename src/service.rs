@@ -390,6 +390,17 @@ impl WalletServiceImpl {
             return Err(ServiceError::WithdrawLocked);
         }
 
+        let builder = TransactionTypeBuilder::Transfers(vec![TransferBuilder {
+                amount,
+                asset: XELIS_ASSET,
+                destination: to.clone(),
+                extra_data: None,
+                encrypt_extra_data: true,
+            }
+        ]);
+
+        let fee = self.wallet.estimate_fees(builder.clone(), Default::default(), Default::default()).await?;
+
         let mut storage = self.wallet.get_storage().write().await;
         let (balance, fee, mut state, transaction) = {
             let balance = self.get_balance_internal(&storage, user);
@@ -397,16 +408,6 @@ impl WalletServiceImpl {
                 return Err(ServiceError::NotEnoughFunds(amount));
             }
 
-            let builder = TransactionTypeBuilder::Transfers(vec![TransferBuilder {
-                    amount,
-                    asset: XELIS_ASSET,
-                    destination: to.clone(),
-                    extra_data: None,
-                    encrypt_extra_data: true,
-                }
-            ]);
-
-            let fee = self.wallet.estimate_fees(builder.clone(), Default::default(), Default::default()).await?;
             // Verify if he has enough with fees included
             if fee + amount > balance {
                 return Err(ServiceError::NotEnoughFundsForFee(fee));
@@ -467,7 +468,6 @@ impl WalletServiceImpl {
 
     // Withdraw XEL from the service to an address
     pub async fn withdraw_to(&self, to: Address, amount: u64) -> Result<(), ServiceError> {
-        let mut storage = self.wallet.get_storage().write().await;
         let fee = self.wallet.estimate_fees(
             TransactionTypeBuilder::Transfers(vec![TransferBuilder {
                 amount,
@@ -480,6 +480,7 @@ impl WalletServiceImpl {
             Default::default()
         ).await?;
 
+        let mut storage = self.wallet.get_storage().write().await;
         let (transaction, mut state) = self.wallet.create_transaction_with_storage(
             &storage,
             TransactionTypeBuilder::Transfers(vec![TransferBuilder {
