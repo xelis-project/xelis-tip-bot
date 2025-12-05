@@ -15,3 +15,6 @@ xelis_wallet = { package = "xelis_wallet", git = "https://github.com/xelis-proje
 clap = { version = "4.5.2", features = ["derive"] }
 log = "0.4.22"
 teloxide = { version = "0.17", features = ["macros"] }
+
+# Required because of a clash between rustls & aws-lc-rs dependencies
+rustls = { version = "0.23.35", features = ["ring"] }
