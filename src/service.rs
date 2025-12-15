@@ -456,6 +456,18 @@ impl WalletServiceImpl {
         Ok(())
     }
 
+    pub async fn remove_balance(&self, user: &UserApplication, amount: u64) -> Result<(), ServiceError> {
+        warn!("Removing {} XEL from {:?}", format_xelis(amount), user);
+        let mut storage = self.wallet.get_storage().write().await;
+        let balance = self.get_balance_internal(&storage, user);
+        if amount > balance {
+            return Err(ServiceError::NotEnoughFunds(amount));
+        }
+        storage.set_custom_data(BALANCES_TREE, &user.into(), &(balance - amount).into())?;
+
+        Ok(())
+    }
+
     // Withdraw all XEL from the service to an address
     pub async fn withdraw_all(&self, to: Address) -> Result<(), ServiceError> {
         let amount = {
