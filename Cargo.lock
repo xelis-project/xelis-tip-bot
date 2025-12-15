@@ -528,15 +528,15 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "base64ct"
-version = "1.8.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55248b47b0caf0546f7988906588779981c43bb1bc9d0c44087278f80cdb44ba"
+checksum = "0e050f626429857a27ddccb31e0aca21356bfa709c04041aefddac081a8f068a"
 
 [[package]]
 name = "better_any"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1795ebc740ea791ffbe6685e0688ab1effec16c2864e0476db40bfdf0c02cb3d"
+checksum = "4372b9543397a4b86050cc5e7ee36953edf4bac9518e8a774c2da694977fb6e4"
 
 [[package]]
 name = "bindgen"
@@ -727,9 +727,9 @@ dependencies = [
 
 [[package]]
 name = "camino"
-version = "1.2.1"
+version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "276a59bf2b2c967788139340c9f0c5b12d7fd6630315c15c217e559de85d2609"
+checksum = "e629a66d692cb9ff1a1c664e41771b3dcaf961985a9774c0eb0bd1b51cf60a48"
 dependencies = [
  "serde_core",
 ]
@@ -758,9 +758,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.48"
+version = "1.2.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c481bdbf0ed3b892f6f806287d72acd515b352a4ec27a208489b8c1bc839633a"
+checksum = "90583009037521a116abf44494efecd645ba48b6622457080f080b85544e2215"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -905,9 +905,9 @@ checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
 
 [[package]]
 name = "cmake"
-version = "0.1.54"
+version = "0.1.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7caa3f9de89ddbe2c607f4101924c5abec803763ae9534e4f4d7d8f84aa81f0"
+checksum = "b042e5d8a74ae91bb0961acd039822472ec99f8ab0948cbf6d1369588f8be586"
 dependencies = [
  "cc",
 ]
@@ -2006,9 +2006,9 @@ checksum = "7aedcccd01fc5fe81e6b489c15b247b8b0690feb23304303a9e560f37efc560a"
 
 [[package]]
 name = "icu_properties"
-version = "2.1.1"
+version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e93fcd3157766c0c8da2f8cff6ce651a31f0810eaa1c51ec363ef790bbb5fb99"
+checksum = "020bfc02fe870ec3a66d93e677ccca0562506e5872c650f893269e08615d74ec"
 dependencies = [
  "icu_collections",
  "icu_locale_core",
@@ -2020,9 +2020,9 @@ dependencies = [
 
 [[package]]
 name = "icu_properties_data"
-version = "2.1.1"
+version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02845b3647bb045f1100ecd6480ff52f34c35f82d9880e029d329c21d1054899"
+checksum = "616c294cf8d725c6afcd8f55abc17c56464ef6211f9ed59cccffe534129c77af"
 
 [[package]]
 name = "icu_provider"
@@ -3073,9 +3073,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.24"
+version = "0.12.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d0946410b9f7b082a427e4ef5c8ff541a88b357bc6c637c40db3a68ac70a36f"
+checksum = "3b4c14b2d9afca6a60277086b0cc6a6ae0b568f6f7916c943a8cdc79f8be240f"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -3615,9 +3615,9 @@ dependencies = [
 
 [[package]]
 name = "simd-adler32"
-version = "0.3.7"
+version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
+checksum = "e320a6c5ad31d271ad523dcf3ad13e2767ad8b1cb8f047f75a8aeaf8da139da2"
 
 [[package]]
 name = "skeptic"
@@ -3889,7 +3889,7 @@ dependencies = [
  "once_cell",
  "pin-project",
  "rc-box",
- "reqwest 0.12.24",
+ "reqwest 0.12.26",
  "rgb",
  "serde",
  "serde_json",
@@ -4199,9 +4199,9 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.23.7"
+version = "0.23.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6485ef6d0d9b5d0ec17244ff7eb05310113c3f316f2d14200d4de56b3cb98f8d"
+checksum = "5d7cbc3b4b49633d57a0509303158ca50de80ae32c265093b24c414705807832"
 dependencies = [
  "indexmap 2.12.1",
  "toml_datetime",
@@ -4235,9 +4235,9 @@ dependencies = [
 
 [[package]]
 name = "tower-http"
-version = "0.6.7"
+version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cf146f99d442e8e68e585f5d798ccd3cad9a7835b917e09728880a862706456"
+checksum = "d4e6559d53cc268e5031cd8429d05415bc4cb4aefc4aa5d6cc35fbf5b924a1f8"
 dependencies = [
  "bitflags 2.10.0",
  "bytes",
@@ -5017,7 +5017,7 @@ dependencies = [
 [[package]]
 name = "xelis-ast"
 version = "0.1.0"
-source = "git+https://github.com/xelis-project/xelis-vm?branch=dev#b73f7b7e735c7c873450dac51e7332a2fbc9fa71"
+source = "git+https://github.com/xelis-project/xelis-vm?branch=dev#fecf92565cbefe0c4e132883db39d89809e97302"
 dependencies = [
  "indexmap 2.12.1",
  "xelis-types",
@@ -5026,7 +5026,7 @@ dependencies = [
 [[package]]
 name = "xelis-builder"
 version = "0.1.0"
-source = "git+https://github.com/xelis-project/xelis-vm?branch=dev#b73f7b7e735c7c873450dac51e7332a2fbc9fa71"
+source = "git+https://github.com/xelis-project/xelis-vm?branch=dev#fecf92565cbefe0c4e132883db39d89809e97302"
 dependencies = [
  "anyhow",
  "hex",
@@ -5041,7 +5041,7 @@ dependencies = [
 [[package]]
 name = "xelis-bytecode"
 version = "0.1.0"
-source = "git+https://github.com/xelis-project/xelis-vm?branch=dev#b73f7b7e735c7c873450dac51e7332a2fbc9fa71"
+source = "git+https://github.com/xelis-project/xelis-vm?branch=dev#fecf92565cbefe0c4e132883db39d89809e97302"
 dependencies = [
  "hex",
  "indexmap 2.12.1",
@@ -5070,7 +5070,7 @@ dependencies = [
 [[package]]
 name = "xelis-environment"
 version = "0.1.0"
-source = "git+https://github.com/xelis-project/xelis-vm?branch=dev#b73f7b7e735c7c873450dac51e7332a2fbc9fa71"
+source = "git+https://github.com/xelis-project/xelis-vm?branch=dev#fecf92565cbefe0c4e132883db39d89809e97302"
 dependencies = [
  "anyhow",
  "better_any",
@@ -5085,7 +5085,7 @@ dependencies = [
 [[package]]
 name = "xelis-hash"
 version = "0.1.0"
-source = "git+https://github.com/xelis-project/xelis-hash?branch=master#f78e275b3d56283cc428e7a4ffc05c85e56e9047"
+source = "git+https://github.com/xelis-project/xelis-hash?branch=master#148d3e946075eb6a43c082bc9766699248f55f5a"
 dependencies = [
  "aes 0.8.4",
  "blake3",
@@ -5098,7 +5098,7 @@ dependencies = [
 [[package]]
 name = "xelis-types"
 version = "0.1.0"
-source = "git+https://github.com/xelis-project/xelis-vm?branch=dev#b73f7b7e735c7c873450dac51e7332a2fbc9fa71"
+source = "git+https://github.com/xelis-project/xelis-vm?branch=dev#fecf92565cbefe0c4e132883db39d89809e97302"
 dependencies = [
  "anyhow",
  "hex",
@@ -5114,7 +5114,7 @@ dependencies = [
 [[package]]
 name = "xelis-vm"
 version = "0.1.0"
-source = "git+https://github.com/xelis-project/xelis-vm?branch=dev#b73f7b7e735c7c873450dac51e7332a2fbc9fa71"
+source = "git+https://github.com/xelis-project/xelis-vm?branch=dev#fecf92565cbefe0c4e132883db39d89809e97302"
 dependencies = [
  "anyhow",
  "futures",
@@ -5128,8 +5128,8 @@ dependencies = [
 
 [[package]]
 name = "xelis_common"
-version = "1.19.0"
-source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#32fb29ff325670aac2020c83776c27b74c076ac8"
+version = "1.19.4"
+source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#46fb044e354d8c0ca1fe5791426966e8f401e1ad"
 dependencies = [
  "actix-rt",
  "actix-web",
@@ -5185,8 +5185,8 @@ dependencies = [
 
 [[package]]
 name = "xelis_wallet"
-version = "1.19.0"
-source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#32fb29ff325670aac2020c83776c27b74c076ac8"
+version = "1.19.4"
+source = "git+https://github.com/xelis-project/xelis-blockchain.git?branch=dev#46fb044e354d8c0ca1fe5791426966e8f401e1ad"
 dependencies = [
  "actix-web",
  "actix-web-httpauth",
