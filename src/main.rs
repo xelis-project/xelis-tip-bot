@@ -181,6 +181,8 @@ async fn main() -> Result<()> {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
+    xelis_common::config::init();
+
     let mut config = Config::parse();
 
     // Init wallet service
